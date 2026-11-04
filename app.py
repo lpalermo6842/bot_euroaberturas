@@ -392,6 +392,143 @@ async def ver_admin():
         return FileResponse("admin.html")
     return HTMLResponse("<h2>Archivo admin.html no encontrado</h2>")
 
+@app.get("/dashboard")
+@app.get("/dashboard.html")
+async def ver_dashboard():
+    if os.path.exists("dashboard.html"):
+        return FileResponse("dashboard.html")
+    return HTMLResponse("<h2>Archivo dashboard.html no encontrado</h2>")
+
+# --- DASHBOARD DE ANALISIS (sobre mensajes_log) ---
+import unicodedata
+import statistics
+from datetime import datetime, timedelta
+
+def _normalizar(t):
+    return unicodedata.normalize("NFD", (t or "").lower()).encode("ascii", "ignore").decode()
+
+def cargar_categorias():
+    ruta = os.path.join(os.path.dirname(os.path.abspath(__file__)), "categorias.json")
+    try:
+        with open(ruta, "r", encoding="utf-8") as f:
+            datos = json.load(f)
+        return {nombre: [_normalizar(p) for p in palabras] for nombre, palabras in datos.items()}
+    except Exception as e:
+        print(f"❌ No se pudo leer categorias.json: {e}")
+        return {}
+
+def _stats_tiempos(minutos):
+    if not minutos:
+        return {"respuestas": 0, "mediana_min": None, "promedio_min": None, "pct_15min": None, "pct_1h": None, "pct_24h": None}
+    n = len(minutos)
+    return {
+        "respuestas": n,
+        "mediana_min": round(statistics.median(minutos), 1),
+        "promedio_min": round(sum(minutos) / n, 1),
+        "pct_15min": round(100 * sum(1 for m in minutos if m <= 15) / n, 1),
+        "pct_1h": round(100 * sum(1 for m in minutos if m <= 60) / n, 1),
+        "pct_24h": round(100 * sum(1 for m in minutos if m <= 1440) / n, 1),
+    }
+
+@app.get("/api/admin/dashboard")
+async def dashboard_datos(dias: int = 30):
+    try:
+        dias = max(1, min(int(dias), 3650))
+        ahora = datetime.now()
+        desde = ahora - timedelta(days=dias)
+        categorias = cargar_categorias()
+
+        db = get_db()
+        cur = db.cursor(dictionary=True)
+        cur.execute(
+            "SELECT session_id, fecha, direccion, texto, push_name FROM mensajes_log "
+            "WHERE canal='whatsapp' AND es_grupo=0 AND fecha >= %s ORDER BY session_id, fecha, id",
+            (desde,),
+        )
+        filas = cur.fetchall()
+        cur.close()
+        db.close()
+
+        sesiones = {}
+        for f in filas:
+            sesiones.setdefault(f["session_id"], []).append(f)
+
+        tiempos_global = []
+        por_dia = {}
+        cats = {n: {"conversaciones": 0, "sin_contestar": 0, "tiempos": []} for n in categorias}
+        cats["Sin categoría"] = {"conversaciones": 0, "sin_contestar": 0, "tiempos": []}
+        sin_contestar = []
+        entrantes = salientes = 0
+
+        for sid, msgs in sesiones.items():
+            pendiente = None  # fecha del primer mensaje del cliente sin contestar
+            ultimo_cliente = ""
+            nombre = None
+            texto_cliente = []
+            tiempos_sesion = []
+            for m in msgs:
+                dia = m["fecha"].strftime("%Y-%m-%d")
+                d = por_dia.setdefault(dia, {"entrantes": 0, "salientes": 0})
+                if m["direccion"] == "entrante":
+                    entrantes += 1
+                    d["entrantes"] += 1
+                    if pendiente is None:
+                        pendiente = m["fecha"]
+                    ultimo_cliente = m["texto"] or ""
+                    texto_cliente.append(_normalizar(m["texto"]))
+                    if m["push_name"]:
+                        nombre = m["push_name"]
+                else:
+                    salientes += 1
+                    d["salientes"] += 1
+                    if pendiente is not None:
+                        minutos = (m["fecha"] - pendiente).total_seconds() / 60
+                        tiempos_sesion.append(minutos)
+                        pendiente = None
+
+            if not texto_cliente:
+                continue  # conversacion sin mensajes del cliente en el periodo
+            junto = " ".join(texto_cliente)
+            asignadas = [n for n, palabras in categorias.items() if any(p in junto for p in palabras)] or ["Sin categoría"]
+            for n in asignadas:
+                cats[n]["conversaciones"] += 1
+                cats[n]["tiempos"].extend(tiempos_sesion)
+                if pendiente is not None:
+                    cats[n]["sin_contestar"] += 1
+            tiempos_global.extend(tiempos_sesion)
+            if pendiente is not None:
+                sin_contestar.append({
+                    "session_id": sid,
+                    "nombre": nombre,
+                    "desde": pendiente.isoformat(sep=" "),
+                    "espera_horas": round((ahora - pendiente).total_seconds() / 3600, 1),
+                    "ultimo_mensaje": ultimo_cliente[:120],
+                    "categorias": asignadas,
+                })
+
+        sin_contestar.sort(key=lambda x: x["espera_horas"], reverse=True)
+        conversaciones = sum(1 for msgs in sesiones.values() if any(m["direccion"] == "entrante" for m in msgs))
+
+        return {
+            "status": "ok",
+            "dias": dias,
+            "totales": {
+                "conversaciones": conversaciones,
+                "mensajes_entrantes": entrantes,
+                "mensajes_salientes": salientes,
+                "sin_contestar": len(sin_contestar),
+            },
+            "tiempos": _stats_tiempos(tiempos_global),
+            "categorias": [
+                {"nombre": n, "conversaciones": v["conversaciones"], "sin_contestar": v["sin_contestar"], **_stats_tiempos(v["tiempos"])}
+                for n, v in cats.items()
+            ],
+            "por_dia": [{"dia": k, **v} for k, v in sorted(por_dia.items())],
+            "sin_contestar": sin_contestar[:100],
+        }
+    except Exception as e:
+        return {"status": "error", "detalle": str(e)}
+
 @app.get("/canales")
 @app.get("/canales.html")
 async def vista_canales():

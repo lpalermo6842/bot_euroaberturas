@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Dashboard - Euroaberturas</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-50 text-gray-800 min-h-screen">
+<div class="max-w-6xl mx-auto p-4 md:p-6 space-y-6">
+
+    <div class="flex flex-wrap items-center justify-between gap-3">
+        <div>
+            <h1 class="text-xl font-bold">📊 Dashboard de atención</h1>
+            <p class="text-xs text-gray-500">WhatsApp · calculado sobre los mensajes registrados</p>
+        </div>
+        <div class="flex items-center gap-2">
+            <a href="admin" class="text-xs font-bold text-gray-600 border border-gray-300 rounded-lg px-3 py-1.5 bg-white hover:bg-gray-100">← Bandeja</a>
+            <select id="dias" class="text-xs font-bold border border-gray-300 rounded-lg px-3 py-1.5 bg-white outline-none">
+                <option value="7">Últimos 7 días</option>
+                <option value="30" selected>Últimos 30 días</option>
+                <option value="90">Últimos 90 días</option>
+                <option value="365">Último año</option>
+                <option value="3650">Todo</option>
+            </select>
+        </div>
+    </div>
+
+    <div id="error" class="hidden bg-red-50 border border-red-200 text-red-700 text-xs rounded-lg p-3"></div>
+
+    <div class="grid grid-cols-2 md:grid-cols-5 gap-3" id="tarjetas"></div>
+
+    <div class="bg-white border border-gray-200 rounded-xl p-4 shadow-sm">
+        <h2 class="text-sm font-bold mb-3">Por tema</h2>
+        <div class="overflow-x-auto">
+            <table class="w-full text-xs">
+                <thead>
+                    <tr class="text-left text-gray-500 border-b">
+                        <th class="py-2 pr-3">Tema</th>
+                        <th class="py-2 pr-3 text-right">Conversaciones</th>
+                        <th class="py-2 pr-3 text-right">Sin contestar</th>
+                        <th class="py-2 pr-3 text-right">Mediana</th>
+                        <th class="py-2 pr-3 text-right">Promedio</th>
+                        <th class="py-2 pr-3 text-right">≤ 1 h</th>
+                        <th class="py-2 text-right">≤ 24 h</th>
+                    </tr>
+                </thead>
+                <tbody id="tabla-temas"></tbody>
+            </table>
+        </div>
+        <p class="text-[10px] text-gray-400 mt-2">Un tema se asigna por palabras clave (archivo <code>categorias.json</code>). Una conversación puede estar en más de un tema.</p>
+    </div>
+
+    <div class="bg-white border border-gray-200 rounded-xl p-4 shadow-sm">
+        <h2 class="text-sm font-bold mb-3">Mensajes por día</h2>
+        <div id="grafico" class="flex items-end gap-px h-32 overflow-x-auto"></div>
+        <div class="flex gap-4 text-[10px] text-gray-500 mt-2">
+            <span><span class="inline-block w-2 h-2 bg-amber-400 rounded-sm"></span> Recibidos</span>
+            <span><span class="inline-block w-2 h-2 bg-blue-500 rounded-sm"></span> Enviados</span>
+        </div>
+    </div>
+
+    <div class="bg-white border border-gray-200 rounded-xl p-4 shadow-sm">
+        <h2 class="text-sm font-bold mb-3">Sin contestar <span id="cant-sin" class="text-gray-400 font-normal"></span></h2>
+        <div class="overflow-x-auto">
+            <table class="w-full text-xs">
+                <thead>
+                    <tr class="text-left text-gray-500 border-b">
+                        <th class="py-2 pr-3">Cliente</th>
+                        <th class="py-2 pr-3">Espera</th>
+                        <th class="py-2 pr-3">Tema</th>
+                        <th class="py-2">Último mensaje</th>
+                    </tr>
+                </thead>
+                <tbody id="tabla-sin"></tbody>
+            </table>
+        </div>
+    </div>
+
+</div>
+
+<script>
+    const API_BASE = '/bot_euroaberturas/api';
+
+    function esc(t) {
+        return String(t ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+    }
+    function fmtMin(m) {
+        if (m === null || m === undefined) return '—';
+        if (m < 60) return Math.round(m) + ' min';
+        if (m < 1440) return (m / 60).toFixed(1) + ' h';
+        return (m / 1440).toFixed(1) + ' d';
+    }
+    function fmtHoras(h) {
+        if (h < 1) return Math.round(h * 60) + ' min';
+        if (h < 48) return h.toFixed(1) + ' h';
+        return Math.round(h / 24) + ' d';
+    }
+    function pct(v) { return (v === null || v === undefined) ? '—' : v + '%'; }
+
+    function tarjeta(titulo, valor, extra, rojo) {
+        return `<div class="bg-white border ${rojo ? 'border-red-300' : 'border-gray-200'} rounded-xl p-3 shadow-sm">
+            <div class="text-[10px] uppercase font-bold text-gray-400">${titulo}</div>
+            <div class="text-2xl font-black ${rojo ? 'text-red-600' : 'text-gray-900'}">${valor}</div>
+            <div class="text-[10px] text-gray-400">${extra || ''}</div></div>`;
+    }
+
+    async function cargar() {
+        const dias = document.getElementById('dias').value;
+        const err = document.getElementById('error');
+        err.classList.add('hidden');
+        try {
+            const res = await fetch(`${API_BASE}/admin/dashboard?dias=${dias}`);
+            const d = await res.json();
+            if (d.status !== 'ok') throw new Error(d.detalle || 'Error');
+
+            const t = d.totales, ti = d.tiempos;
+            document.getElementById('tarjetas').innerHTML =
+                tarjeta('Conversaciones', t.conversaciones, `${t.mensajes_entrantes} recibidos · ${t.mensajes_salientes} enviados`) +
+                tarjeta('Sin contestar', t.sin_contestar, 'el último mensaje es del cliente', t.sin_contestar > 0) +
+                tarjeta('Tiempo mediano', fmtMin(ti.mediana_min), `promedio ${fmtMin(ti.promedio_min)}`) +
+                tarjeta('Respondido en ≤ 1 h', pct(ti.pct_1h), `${pct(ti.pct_15min)} en ≤ 15 min`) +
+                tarjeta('Respondido en ≤ 24 h', pct(ti.pct_24h), `${ti.respuestas} respuestas medidas`);
+
+            document.getElementById('tabla-temas').innerHTML = d.categorias.map(c => `
+                <tr class="border-b last:border-0">
+                    <td class="py-2 pr-3 font-bold">${esc(c.nombre)}</td>
+                    <td class="py-2 pr-3 text-right">${c.conversaciones}</td>
+                    <td class="py-2 pr-3 text-right ${c.sin_contestar ? 'text-red-600 font-bold' : ''}">${c.sin_contestar}</td>
+                    <td class="py-2 pr-3 text-right">${fmtMin(c.mediana_min)}</td>
+                    <td class="py-2 pr-3 text-right">${fmtMin(c.promedio_min)}</td>
+                    <td class="py-2 pr-3 text-right">${pct(c.pct_1h)}</td>
+                    <td class="py-2 text-right">${pct(c.pct_24h)}</td>
+                </tr>`).join('');
+
+            const max = Math.max(1, ...d.por_dia.map(x => x.entrantes + x.salientes));
+            document.getElementById('grafico').innerHTML = d.por_dia.map(x => {
+                const he = Math.round(100 * x.entrantes / max), hs = Math.round(100 * x.salientes / max);
+                return `<div class="flex flex-col justify-end items-stretch min-w-[6px] flex-1 h-full" title="${esc(x.dia)}: ${x.entrantes} recibidos, ${x.salientes} enviados">
+                    <div class="bg-blue-500" style="height:${hs}%"></div><div class="bg-amber-400" style="height:${he}%"></div></div>`;
+            }).join('');
+
+            document.getElementById('cant-sin').textContent = `(${d.sin_contestar.length}${t.sin_contestar > d.sin_contestar.length ? ' de ' + t.sin_contestar : ''})`;
+            document.getElementById('tabla-sin').innerHTML = d.sin_contestar.length ? d.sin_contestar.map(s => `
+                <tr class="border-b last:border-0 align-top">
+                    <td class="py-2 pr-3"><div class="font-bold">${esc(s.nombre || s.session_id)}</div><div class="text-[10px] text-gray-400">${esc(s.session_id)}</div></td>
+                    <td class="py-2 pr-3 font-bold ${s.espera_horas > 24 ? 'text-red-600' : 'text-amber-600'}">${fmtHoras(s.espera_horas)}</td>
+                    <td class="py-2 pr-3">${esc(s.categorias.join(', '))}</td>
+                    <td class="py-2 text-gray-600">${esc(s.ultimo_mensaje)}</td>
+                </tr>`).join('') : '<tr><td colspan="4" class="py-4 text-center text-gray-400">Todo contestado 🎉</td></tr>';
+        } catch (e) {
+            err.textContent = 'No se pudieron cargar los datos: ' + e.message;
+            err.classList.remove('hidden');
+        }
+    }
+
+    document.getElementById('dias').addEventListener('change', cargar);
+    cargar();
+    setInterval(cargar, 60000);
+</script>
+</body>
+</html>

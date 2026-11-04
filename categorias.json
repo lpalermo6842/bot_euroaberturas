@@ -1,0 +1,5 @@
+{
+  "Presupuestos": ["presupuesto", "cotiza", "precio", "cuanto sale", "cuanto cuesta", "cuanto vale", "costo", "valor de"],
+  "Recambio": ["recambio", "repuesto", "reposicion", "reparar", "reparacion", "arreglo", "arreglar", "service", "cambiar el vidrio", "cambiar vidrio"],
+  "Pisos": ["piso", "laminado", "flotante", "vinilico", "deck", "zocalo"]
+}
