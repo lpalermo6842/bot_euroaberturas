@@ -101,6 +101,38 @@ def init_log_table():
     except Exception as e:
         print(f"❌ No se pudo crear mensajes_log: {e}")
 
+_WA_INFO = {
+    "imageMessage": b"WhatsApp Image Keys", "stickerMessage": b"WhatsApp Image Keys",
+    "videoMessage": b"WhatsApp Video Keys", "audioMessage": b"WhatsApp Audio Keys",
+    "documentMessage": b"WhatsApp Document Keys",
+}
+
+def _clave_bytes(v):
+    if isinstance(v, dict):
+        return bytes(v[k] for k in sorted(v, key=lambda x: int(x)))
+    if isinstance(v, str):
+        return base64.b64decode(v)
+    return bytes(v)
+
+def descifrar_media_whatsapp(tipo, sub):
+    """Baja el .enc de WhatsApp y lo descifra con la mediaKey (AES-256-CBC + HKDF)."""
+    from cryptography.hazmat.primitives import hashes, padding
+    from cryptography.hazmat.primitives.kdf.hkdf import HKDF
+    from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
+    url = sub.get("url")
+    if not url or not sub.get("mediaKey"):
+        return None
+    enc = requests.get(url, timeout=30).content
+    if len(enc) > MEDIA_MAX_BYTES * 2:
+        return None
+    clave = HKDF(algorithm=hashes.SHA256(), length=112, salt=None, info=_WA_INFO[tipo]).derive(_clave_bytes(sub["mediaKey"]))
+    iv, cipher_key = clave[:16], clave[16:48]
+    cuerpo = enc[:-10]  # los ultimos 10 bytes son el MAC
+    dec = Cipher(algorithms.AES(cipher_key), modes.CBC(iv)).decryptor()
+    plano = dec.update(cuerpo) + dec.finalize()
+    unp = padding.PKCS7(128).unpadder()
+    return unp.update(plano) + unp.finalize()
+
 def extraer_media(msg_data, message_content):
     """Devuelve (nombre_archivo, mime, bytes) si el mensaje trae multimedia en base64."""
     try:
@@ -109,11 +141,14 @@ def extraer_media(msg_data, message_content):
             if not sub:
                 continue
             b64 = message_content.get("base64") or msg_data.get("base64") or sub.get("base64")
-            if not b64:
+            if b64:
+                if "," in b64[:80]:
+                    b64 = b64.split(",", 1)[1]
+                datos = base64.b64decode(b64)
+            else:
+                datos = descifrar_media_whatsapp(k, sub)
+            if not datos:
                 return None
-            if "," in b64[:80]:
-                b64 = b64.split(",", 1)[1]
-            datos = base64.b64decode(b64)
             if len(datos) > MEDIA_MAX_BYTES:
                 return None
             mime = (sub.get("mimetype") or "application/octet-stream").split(";")[0]
@@ -470,7 +505,7 @@ async def webhook_whatsapp(request: Request, background_tasks: BackgroundTasks):
                         mensaje = message_content[k].get("caption", "") or ""
                         break
 
-            media = extraer_media(msg_data, message_content)
+            media = await asyncio.to_thread(extraer_media, msg_data, message_content)
             # No guardar el base64 gigante dentro del raw
             try:
                 for contenedor in (message_content, msg_data):
