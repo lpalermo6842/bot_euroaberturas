@@ -484,7 +484,10 @@
                     </div>
                     ${c.nombre_cliente ? `<div class="text-[10px] text-gray-400">${c.session_id}</div>` : ''}
                     ${c.etiquetas ? `<div class="text-[9px] text-red-600 font-semibold truncate">🏷️ ${c.etiquetas}</div>` : ''}
-                    <p class="text-xs ${esNuevo ? 'text-gray-900 font-semibold' : 'text-gray-500'} truncate">${previewTexto(c.ultimo_mensaje) || 'Sin mensajes'}</p>
+                    <div class="flex items-center justify-between gap-2">
+                        <p class="text-xs ${esNuevo ? 'text-gray-900 font-semibold' : 'text-gray-500'} truncate">${previewTexto(c.ultimo_mensaje) || 'Sin mensajes'}</p>
+                        <span class="text-[10px] shrink-0 ${esNuevo ? 'text-amber-700 font-bold' : 'text-gray-400'}">${horaLista(c.ultima_actividad)}</span>
+                    </div>
                 `;
                 container.appendChild(card);
             });
@@ -506,6 +509,16 @@
             else if (mime.startsWith('video/')) html = `<video controls preload="none" src="${url}" class="rounded-lg max-h-64"></video>`;
             else html = `<a href="${url}" target="_blank" class="underline text-blue-700">📄 Abrir archivo</a>`;
             return html + (resto ? `<div>${resto}</div>` : '');
+        }
+
+        function horaLista(valor) {
+            if (!valor) return '';
+            const d = new Date(String(valor).replace(' ', 'T'));
+            if (isNaN(d)) return '';
+            const hoy = new Date(), ayer = new Date(Date.now() - 86400000);
+            if (d.toDateString() === hoy.toDateString()) return d.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' });
+            if (d.toDateString() === ayer.toDateString()) return 'Ayer';
+            return d.toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit' });
         }
 
         function fechaDeMensaje(m) {

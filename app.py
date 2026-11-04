@@ -635,7 +635,11 @@ async def listar_chats():
     try:
         db = get_db()
         cursor = db.cursor(dictionary=True)
-        cursor.execute("SELECT * FROM conversaciones ORDER BY id DESC")
+        cursor.execute("""
+            SELECT c.*, (SELECT MAX(m.`timestamp`) FROM mensajes m WHERE m.conversacion_id = c.id) AS ultima_actividad
+            FROM conversaciones c
+            ORDER BY ultima_actividad DESC, c.id DESC
+        """)
         chats = cursor.fetchall()
         cursor.close()
         db.close()
