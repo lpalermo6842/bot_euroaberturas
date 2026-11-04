@@ -530,10 +530,22 @@ async def webhook_whatsapp(request: Request, background_tasks: BackgroundTasks):
             if es_grupo:
                 return {"status": "ignored_group"}
 
+            # Si hay multimedia, el panel recibe un marcador [[media:archivo|mime]]
+            archivos_ia = None
+            if media:
+                nombre_arch, mime_arch, datos_arch = media
+                etiqueta = ("📷 Imagen" if mime_arch.startswith("image/") else
+                            "🎤 Audio" if mime_arch.startswith("audio/") else
+                            "🎬 Video" if mime_arch.startswith("video/") else "📄 Documento")
+                mensaje = f"{etiqueta} [[media:{nombre_arch}|{mime_arch}]]" + (chr(10) + mensaje if mensaje else "")
+                if not is_from_me and (mime_arch.startswith(("image/", "audio/")) or mime_arch == "application/pdf"):
+                    archivos_ia = [{"data": datos_arch, "mime": mime_arch}]
+
             if mensaje:
                 respuesta, _ = await procesar_mensaje_core(
                     session_id=numero,
                     mensaje_cliente=mensaje,
+                    archivos_bytes=archivos_ia,
                     origen_rol=rol_asignado,
                     canal_slug="whatsapp"
                 )
