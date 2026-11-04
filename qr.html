@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Escanear QR - Euroaberturas</title>
+    <style>
+        body { background: #0f172a; color: white; font-family: system-ui, sans-serif; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; margin: 0; }
+        .card { background: #1e293b; padding: 30px; border-radius: 16px; text-align: center; box-shadow: 0 10px 25px rgba(0,0,0,0.5); }
+        img { width: 280px; height: 280px; background: white; padding: 12px; border-radius: 12px; margin-top: 15px; }
+    </style>
+</head>
+<body>
+    <div class="card">
+        <h2>📱 Vinculá WhatsApp</h2>
+        <p style="color:#94a3b8; font-size:14px;">Ajustes > Dispositivos vinculados > Vincular dispositivo</p>
+        <img id="qrImg" src="" alt="Cargando QR...">
+    </div>
+
+<script>
+    async function cargarQR() {
+        try {
+            const res = await fetch('/bot_euroaberturas/api/conexion-qr');
+            const data = await res.json();
+            if (data.base64) {
+                document.getElementById('qrImg').src = data.base64;
+            }
+        } catch (e) {
+            console.error('Error cargando QR:', e);
+        }
+    }
+    cargarQR();
+    setInterval(cargarQR, 5000); // Se actualiza automáticamente cada 5 segundos
+</script>
+</body>
+</html>

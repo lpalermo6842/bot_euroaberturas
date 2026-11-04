@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DIPA - Control de Canales</title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+        body { background-color: #f8fafc; color: #1e293b; padding: 30px; }
+
+        .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 25px; }
+        .header h1 { font-size: 22px; font-weight: 800; color: #0f172a; }
+
+        .grid-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; max-width: 700px; margin-bottom: 30px; }
+        .stat-card { background: white; padding: 20px; border-radius: 12px; border: 1px solid #e2e8f0; text-align: center; }
+        .stat-val { font-size: 28px; font-weight: 900; color: #b91c1c; }
+        .stat-lbl { font-size: 11px; font-weight: 700; color: #64748b; text-transform: uppercase; margin-top: 4px; }
+
+        .grid-channels { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 20px; }
+        .card-chan { background: white; border-radius: 12px; border: 1px solid #e2e8f0; padding: 24px; display: flex; flex-direction: column; justify-content: space-between; }
+        .chan-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; }
+        .chan-title { font-weight: 800; font-size: 16px; display: flex; align-items: center; gap: 10px; }
+        
+        .badge-active { background: #dcfce7; color: #15803d; font-size: 10px; font-weight: 800; padding: 4px 10px; border-radius: 20px; }
+        .btn-action { background: #b91c1c; color: white; border: none; padding: 12px; border-radius: 8px; font-weight: 700; cursor: pointer; margin-top: 15px; width: 100%; text-align: center; }
+    </style>
+</head>
+<body>
+
+    <div class="header">
+        <div>
+            <h1>📡 Centro de Control de Canales</h1>
+            <p style="font-size:13px; color:#64748b; margin-top:4px;">Configurá cómo responde el bot y la IA en cada punto de contacto.</p>
+        </div>
+        <a href="./admin" style="background:#0f172a; color:white; padding:10px 16px; border-radius:8px; text-decoration:none; font-size:13px; font-weight:700;"><i class="fa-solid fa-arrow-left"></i> Volver a Bandeja</a>
+    </div>
+
+    <div class="grid-stats">
+        <div class="stat-card">
+            <div class="stat-val" id="cntTotales">3</div>
+            <div class="stat-lbl">Canales Totales</div>
+        </div>
+        <div class="stat-card" style="border-color:#bbf7d0; background:#f0fdf4;">
+            <div class="stat-val" style="color:#15803d;" id="cntActivos">3</div>
+            <div class="stat-lbl" style="color:#15803d;">Activos</div>
+        </div>
+        <div class="stat-card" style="border-color:#fecaca; background:#fef2f2;">
+            <div class="stat-val" style="color:#b91c1c;" id="cntConfigurados">3</div>
+            <div class="stat-lbl" style="color:#b91c1c;">Configurados</div>
+        </div>
+    </div>
+
+    <div class="grid-channels" id="chanGrid"></div>
+
+<script>
+    const getEndpoint = (path) => {
+        const base = window.location.pathname.replace(/\/admin.*$/, '');
+        return (base.endsWith('/') ? base.slice(0, -1) : base) + path;
+    };
+
+    const ICONS = { telegram: 'fa-paper-plane', whatsapp: 'fa-comment', web: 'fa-globe' };
+
+    async function cargar() {
+        try {
+            const res = await fetch(getEndpoint('/api/admin/canales'));
+            const data = await res.json();
+            if (data.status !== 'ok') return;
+
+            const grid = document.getElementById('chanGrid');
+            grid.innerHTML = '';
+
+            data.canales.forEach(c => {
+                const card = document.createElement('div');
+                card.className = 'card-chan';
+                card.innerHTML = `
+                    <div>
+                        <div class="chan-head">
+                            <div class="chan-title">
+                                <i class="fa-solid ${ICONS[c.tipo] || 'fa-circle'}"></i> ${c.nombre}
+                            </div>
+                            <span class="badge-active">ACTIVO</span>
+                        </div>
+                        <div style="font-size:13px; color:#64748b; margin-bottom:10px;">Modo actual: <strong>${c.modo.toUpperCase()}</strong></div>
+                    </div>
+                    <select onchange="cambiarMode('${c.slug}', this.value)" style="padding:10px; border-radius:8px; border:1px solid #cbd5e1; font-weight:700;">
+                        <option value="ia_hibrida" ${c.modo==='ia_hibrida'?'selected':''}>⚡ IA Híbrida</option>
+                        <option value="solo_humano" ${c.modo==='solo_humano'?'selected':''}>👤 Solo Humano</option>
+                        <option value="desactivado" ${c.modo==='desactivado'?'selected':''}>🚫 Desactivado</option>
+                    </select>
+                `;
+                grid.appendChild(card);
+            });
+        } catch(e) { console.error(e); }
+    }
+
+    async function cambiarMode(slug, modo) {
+        const fd = new FormData();
+        fd.append('slug', slug);
+        fd.append('modo', modo);
+        await fetch(getEndpoint('/api/admin/canales/cambiar-modo'), { method: 'POST', body: fd });
+        cargar();
+    }
+
+    cargar();
+</script>
+</body>
+</html>

@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Chatbot - EuroAberturas</title>
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: Arial, sans-serif; }
+        body { background-color: #f4f6f8; display: flex; justify-content: center; align-items: center; height: 100vh; }
+        .chat-card { width: 100%; max-width: 480px; height: 90vh; background: #ffffff; border-radius: 12px; display: flex; flex-direction: column; box-shadow: 0 4px 15px rgba(0,0,0,0.1); overflow: hidden; }
+        .header { background: #ca0b0f; color: white; padding: 16px; font-weight: bold; font-size: 18px; text-align: center; }
+        .messages { flex: 1; padding: 16px; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; }
+        .msg { max-width: 85%; padding: 10px 14px; border-radius: 12px; line-height: 1.4; font-size: 14px; word-wrap: break-word; }
+        .bot { background: #e9ecef; color: #212529; align-self: flex-start; border-bottom-left-radius: 2px; }
+        .user { background: #ca0b0f; color: white; align-self: flex-end; border-bottom-right-radius: 2px; }
+        .msg p { margin-bottom: 8px; }
+        .msg p:last-child { margin-bottom: 0; }
+        .msg ul { padding-left: 20px; margin-bottom: 8px; }
+        .msg strong { font-weight: bold; color: #000; }
+        .input-area { display: flex; flex-direction: column; padding: 10px; border-top: 1px solid #dee2e6; background: #fff; gap: 6px; }
+        .input-row { display: flex; align-items: center; gap: 8px; }
+        input[type="text"] { flex: 1; padding: 10px 14px; border: 1px solid #ced4da; border-radius: 20px; outline: none; font-size: 14px; }
+        .btn-file { cursor: pointer; background: #f0f2f5; padding: 8px 12px; border-radius: 50%; font-size: 18px; border: 1px solid #ccc; }
+        input[type="file"] { display: none; }
+        button { background: #ca0b0f; color: white; border: none; padding: 10px 18px; border-radius: 20px; cursor: pointer; font-weight: bold; }
+        .file-info { font-size: 12px; color: #28a745; padding-left: 10px; font-weight: bold; }
+    </style>
+</head>
+<body>
+
+<div class="chat-card">
+    <div class="header">Asistente EuroAberturas</div>
+    <div class="messages" id="chatBox">
+        <div class="msg bot">¡Hola! Bienvenid@ a EuroAberturas. ¿En qué te puedo ayudar? Si tenés un reclamo o consulta, podés adjuntarme fotos o PDFs.</div>
+    </div>
+    <div class="input-area">
+        <span class="file-info" id="fileStatus"></span>
+        <div class="input-row">
+            <label class="btn-file" title="Adjuntar foto o PDF">📎
+                <input type="file" id="fileInput" multiple accept="image/*,.pdf" onchange="actualizarEstadoArchivos()">
+            </label>
+            <input type="text" id="userInput" placeholder="Escribí tu consulta..." onkeypress="if(event.key==='Enter') enviar()">
+            <button onclick="enviar()">Enviar</button>
+        </div>
+    </div>
+</div>
+
+<script>
+    let sessionId = localStorage.getItem('chat_session_id');
+    if (!sessionId) {
+        sessionId = 'sesion_' + Date.now() + '_' + Math.random().toString(36).substring(2, 7);
+        localStorage.setItem('chat_session_id', sessionId);
+    }
+
+    // Prefijo exacto configurado en Nginx
+    const BASE_URL = window.location.pathname.startsWith('/bot_euroaberturas') ? '/bot_euroaberturas' : '';
+
+    function actualizarEstadoArchivos() {
+        const fileInput = document.getElementById('fileInput');
+        const status = document.getElementById('fileStatus');
+        status.innerText = fileInput.files.length > 0 ? `📎 ${fileInput.files.length} archivo(s)` : '';
+    }
+
+    async function enviar() {
+        const input = document.getElementById('userInput');
+        const fileInput = document.getElementById('fileInput');
+        const box = document.getElementById('chatBox');
+        const texto = input.value.trim();
+
+        if (!texto && fileInput.files.length === 0) return;
+
+        let userMsgText = texto;
+        if (fileInput.files.length > 0) {
+            userMsgText += `<br><small><i>[Adjuntó ${fileInput.files.length} archivo(s)]</i></small>`;
+        }
+
+        box.innerHTML += `<div class="msg user">${userMsgText}</div>`;
+        
+        const formData = new FormData();
+        formData.append('session_id', sessionId);
+        formData.append('mensaje_cliente', texto || "Revisar adjunto");
+
+        for (let i = 0; i < fileInput.files.length; i++) {
+            formData.append('archivos', fileInput.files[i]);
+        }
+
+        input.value = '';
+        fileInput.value = '';
+        actualizarEstadoArchivos();
+        box.scrollTop = box.scrollHeight;
+
+        const tempBotMsg = document.createElement('div');
+        tempBotMsg.className = 'msg bot';
+        tempBotMsg.innerText = 'Escribiendo...';
+        box.appendChild(tempBotMsg);
+        box.scrollTop = box.scrollHeight;
+
+        try {
+            // Utilizamos /api/motor-ia para evadir a Nginx
+            const res = await fetch(`${BASE_URL}/api/motor-ia`, {
+                method: 'POST',
+                body: formData
+            });
+
+            if (!res.ok) {
+                throw new Error(`Servidor respondió con código ${res.status}`);
+            }
+
+            const data = await res.json();
+            const textoRespuesta = data.respuesta || data.response || data.texto || "Gracias por comunicarte.";
+            const htmlRespuesta = marked.parse(textoRespuesta);
+
+            tempBotMsg.innerHTML = `
+                <div class="bot-content">${htmlRespuesta}</div>
+                <div style="margin-top: 8px; font-size: 13px; display: flex; gap: 12px; justify-content: flex-end; border-top: 1px solid #dcdcdc; padding-top: 5px;" id="rate-container-${data.mensaje_id}">
+                    <span style="color:#666; font-size:11px; margin-right:auto; align-self:center;">¿Te sirvió la respuesta?</span>
+                    <button onclick="enviarFeedback(${data.mensaje_id}, 1)" style="background:none; border:none; cursor:pointer; font-size:16px;">👍</button>
+                    <button onclick="enviarFeedback(${data.mensaje_id}, -1)" style="background:none; border:none; cursor:pointer; font-size:16px;">👎</button>
+                </div>
+            `;
+        } catch (error) {
+            console.error(error);
+            tempBotMsg.innerText = "⚠️ Error de conexión con el servidor.";
+        }
+        
+        box.scrollTop = box.scrollHeight;
+    }
+
+    async function enviarFeedback(mensajeId, rating) {
+        if (!mensajeId) return;
+        const formData = new FormData();
+        formData.append('mensaje_id', mensajeId);
+        formData.append('rating', rating);
+
+        try {
+            // Utilizamos /api/motor-ia/feedback para evadir a Nginx
+            await fetch(`${BASE_URL}/api/motor-ia/feedback`, { method: 'POST', body: formData });
+            const container = document.getElementById(`rate-container-${mensajeId}`);
+            if(container) container.innerHTML = '<span style="color: #28a745; font-weight:bold;">¡Gracias por tu opinión! ✔️</span>';
+        } catch(e) {
+            console.error(e);
+        }
+    }
+</script>
+
+</body>
+</html>

@@ -1,0 +1,838 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DIPA ERP — Panel Unificado Euroaberturas</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" />
+    <style>
+        .material-symbols-outlined { font-size: 18px; vertical-align: middle; }
+        ::-webkit-scrollbar { width: 5px; height: 5px; }
+        ::-webkit-scrollbar-track { background: #f1f5f9; }
+        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+    </style>
+</head>
+<body class="bg-[#F9FAFB] text-gray-800 font-sans text-sm h-screen flex flex-col md:flex-row overflow-hidden">
+
+    <!-- SIDEBAR / MENÚ IZQUIERDO -->
+    <aside id="sidebar" class="w-full md:w-64 border-r border-gray-200 bg-white flex flex-col justify-between h-auto md:h-full flex-shrink-0 z-40">
+        <div class="overflow-y-auto px-4 py-3">
+            <div class="flex items-center justify-between mb-4 md:mb-6 px-2">
+                <span class="text-2xl font-black tracking-tight text-black">
+                    D<span class="text-[#E50914]">I</span>PA <span class="text-xs font-normal text-gray-400">ERP</span>
+                </span>
+                <button onclick="toggleMobileSidebar()" class="md:hidden text-gray-600">
+                    <span class="material-symbols-outlined">close</span>
+                </button>
+            </div>
+
+            <!-- BOTÓN NUEVO MENSAJE -->
+            <button onclick="abrirModalNuevo()" class="w-full mb-4 bg-[#E50914] hover:bg-red-700 text-white font-bold py-2 px-3 rounded-lg flex items-center justify-center gap-2 shadow-sm transition text-xs">
+                <span class="material-symbols-outlined">add_comment</span>
+                <span>+ Nuevo Mensaje</span>
+            </button>
+
+            <nav class="space-y-4">
+                <div>
+                    <p class="px-2 text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Principal</p>
+                    <ul class="space-y-0.5">
+                        <li>
+                            <button onclick="cambiarVista('bandeja')" id="btn-bandeja" class="nav-btn w-full flex items-center gap-2.5 px-2 py-1.5 rounded-md bg-red-50 text-[#E50914] font-medium transition">
+                                <span class="material-symbols-outlined">inbox</span> Bandeja de Entrada
+                            </button>
+                        </li>
+                    </ul>
+                </div>
+
+                <div>
+                    <p class="px-2 text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Inteligencia IA & Flujos</p>
+                    <ul class="space-y-0.5">
+                        <li>
+                            <button onclick="cambiarVista('flujos')" id="btn-flujos" class="nav-btn w-full flex items-center gap-2.5 px-2 py-1.5 rounded-md text-gray-600 hover:bg-gray-100 transition">
+                                <span class="material-symbols-outlined">schema</span> Flujos Automáticos
+                            </button>
+                        </li>
+                    </ul>
+                </div>
+
+                <div>
+                    <p class="px-2 text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Operación</p>
+                    <ul class="space-y-0.5">
+                        <li><button onclick="cambiarVista('departamentos')" id="btn-departamentos" class="nav-btn w-full flex items-center gap-2.5 px-2 py-1.5 rounded-md text-gray-600 hover:bg-gray-100 transition"><span class="material-symbols-outlined">corporate_fare</span> Departamentos</button></li>
+                        <li><button onclick="cambiarVista('respuestas')" id="btn-respuestas" class="nav-btn w-full flex items-center gap-2.5 px-2 py-1.5 rounded-md text-gray-600 hover:bg-gray-100 transition"><span class="material-symbols-outlined">bolt</span> Respuestas Rápidas</button></li>
+                        <li><button onclick="cambiarVista('etiquetas')" id="btn-etiquetas" class="nav-btn w-full flex items-center gap-2.5 px-2 py-1.5 rounded-md text-gray-600 hover:bg-gray-100 transition"><span class="material-symbols-outlined">sell</span> Etiquetas</button></li>
+                        <li><button onclick="cambiarVista('canales')" id="btn-canales" class="nav-btn w-full flex items-center gap-2.5 px-2 py-1.5 rounded-md text-gray-600 hover:bg-gray-100 transition"><span class="material-symbols-outlined">settings_input_antenna</span> Control de Canales</button></li>
+                    </ul>
+                </div>
+            </nav>
+        </div>
+
+        <div class="p-3 border-t border-gray-200 bg-white">
+            <div class="flex items-center gap-2">
+                <div class="w-8 h-8 rounded-full bg-red-100 text-[#E50914] font-bold flex items-center justify-center text-xs">AD</div>
+                <div>
+                    <p class="font-semibold text-xs leading-none">Admin Euroaberturas</p>
+                    <p class="text-[10px] text-gray-400">Operador Central</p>
+                </div>
+            </div>
+        </div>
+    </aside>
+
+    <!-- ÁREA PRINCIPAL -->
+    <div class="flex-1 flex flex-col h-full overflow-hidden">
+        
+        <!-- HEADER SUPERIOR -->
+        <header class="h-14 border-b border-gray-200 bg-white px-4 md:px-6 flex items-center justify-between flex-shrink-0">
+            <div class="flex items-center gap-3">
+                <button onclick="toggleMobileSidebar()" class="md:hidden text-gray-700">
+                    <span class="material-symbols-outlined">menu</span>
+                </button>
+                <h1 id="titulo-pagina" class="text-base md:text-lg font-bold text-gray-900">Bandeja de Entrada</h1>
+            </div>
+            
+            <div class="flex items-center gap-3">
+                <div class="flex items-center gap-1 border border-red-200 bg-red-50/50 px-2 py-1 rounded-lg">
+                    <span class="text-[10px] md:text-xs font-semibold text-gray-700 hidden sm:inline">IA:</span>
+                    <select id="globalModoSelect" onchange="cambiarModoGlobalWhatsApp(this.value)" class="bg-white border border-red-300 text-red-700 text-[10px] md:text-xs font-bold rounded px-1.5 py-0.5 outline-none">
+                        <option value="solo_humano">[ ! ] Entrenamiento (IA Apagada)</option>
+                        <option value="ia_hibrida">[ + ] Producción (IA Activa)</option>
+                    </select>
+                </div>
+
+                <div class="flex items-center gap-1.5 bg-emerald-50 text-emerald-700 px-2 py-1 rounded-full text-[10px] md:text-xs font-medium border border-emerald-200">
+                    <span class="w-2 h-2 rounded-full bg-emerald-500"></span>
+                    <span class="hidden sm:inline">En línea</span>
+                </div>
+            </div>
+        </header>
+
+        <!-- VISTAS DINÁMICAS -->
+        <main id="contenido-dinamico" class="flex-1 overflow-hidden">
+
+            <!-- VISTA 1: BANDEJA DE ENTRADA -->
+            <div id="vista-bandeja" class="vista-seccion flex h-full overflow-hidden">
+                <div id="columna-lista-chats" class="w-full md:w-[380px] border-r border-gray-200 bg-white flex flex-col h-full flex-shrink-0">
+                    <div class="p-3 border-b border-gray-100 space-y-2">
+                        <!-- Filtros por Canal -->
+                        <div class="flex gap-1 text-xs overflow-x-auto pb-1">
+                            <button onclick="filtrarCanal('todos')" id="tab-canal-todos" class="tab-canal-filter px-2.5 py-1 rounded-full bg-red-600 text-white font-medium transition">Todos</button>
+                            <button onclick="filtrarCanal('wa')" id="tab-canal-wa" class="tab-canal-filter px-2.5 py-1 rounded-full bg-gray-100 text-gray-600 hover:bg-gray-200 transition">WhatsApp</button>
+                            <button onclick="filtrarCanal('tg')" id="tab-canal-tg" class="tab-canal-filter px-2.5 py-1 rounded-full bg-gray-100 text-gray-600 hover:bg-gray-200 transition">Telegram</button>
+                            <button onclick="filtrarCanal('wb')" id="tab-canal-wb" class="tab-canal-filter px-2.5 py-1 rounded-full bg-gray-100 text-gray-600 hover:bg-gray-200 transition">Web</button>
+                        </div>
+                        
+                        <!-- Filtros por Estado -->
+                        <div class="flex justify-between items-center bg-gray-50 p-1 rounded-lg border border-gray-200 text-xs">
+                            <button onclick="filtrarEstado('activos')" id="tab-estado-activos" class="tab-estado-filter flex-1 py-1 text-center font-bold rounded bg-white text-gray-800 shadow-sm">🟡 Activos</button>
+                            <button onclick="filtrarEstado('cerrados')" id="tab-estado-cerrados" class="tab-estado-filter flex-1 py-1 text-center font-bold rounded text-gray-500 hover:text-gray-800">🟢 Cerrados</button>
+                        </div>
+
+                        <input type="text" id="input-buscar" onkeyup="buscarChat()" placeholder="Buscar por cliente o número..." class="w-full border border-gray-200 rounded-lg px-3 py-1.5 text-xs focus:ring-1 focus:ring-red-500 focus:outline-none" />
+                    </div>
+
+                    <div id="chat-list" class="flex-1 overflow-y-auto divide-y divide-gray-50">
+                        <div class="p-6 text-center text-gray-400">Cargando conversaciones...</div>
+                    </div>
+                </div>
+
+                <div id="columna-chat-activo" class="hidden md:flex flex-1 bg-[#F9FAFB] flex-col h-full overflow-hidden w-full">
+                    <div id="chat-header-active" class="hidden border-b border-gray-200 bg-white p-3 flex flex-wrap items-center justify-between gap-2 flex-shrink-0">
+                        <div class="flex items-center gap-2">
+                            <button onclick="volverAListaMobile()" class="md:hidden text-gray-600 mr-1">
+                                <span class="material-symbols-outlined">arrow_back</span>
+                            </button>
+                            <span class="material-symbols-outlined text-gray-500">account_circle</span>
+                            <div>
+                                <input type="text" id="input-nombre-cliente" onchange="guardarDatosChat()" placeholder="Asignar Nombre..." class="font-bold text-xs text-gray-900 border-b border-gray-200 focus:border-red-500 outline-none px-1 py-0.5" />
+                                <div id="active-user-title" class="text-[10px] text-gray-400 px-1">-</div>
+                            </div>
+                        </div>
+
+                        <div class="flex items-center gap-2">
+                            <!-- SELECTOR Y CAMPO DE ETIQUETAS MEJORADO -->
+                            <div class="flex items-center gap-1">
+                                <select id="select-etiqueta-rapida" onchange="agregarEtiquetaSeleccionada(this.value)" class="text-xs border border-gray-300 rounded px-1.5 py-1 outline-none bg-white font-medium text-gray-700">
+                                    <option value="">+ Etiqueta</option>
+                                </select>
+                                <input type="text" id="input-etiquetas" onblur="guardarDatosChat()" placeholder="Etiquetas..." class="text-xs border border-gray-200 rounded px-2 py-1 outline-none w-24 md:w-32 focus:ring-1 focus:ring-red-500" />
+                            </div>
+
+                            <select id="select-estado-atencion" onchange="guardarDatosChat()" class="text-xs font-bold border border-gray-300 rounded px-2 py-1 outline-none">
+                                <option value="nuevo">🔴 Nuevo</option>
+                                <option value="progreso">🟡 En progreso</option>
+                                <option value="espera">🟠 En espera</option>
+                                <option value="cerrado">🟢 Cerrado</option>
+                            </select>
+
+                            <select id="botModeSelect" onchange="cambiarEstadoBot(this.value)" class="text-xs font-bold border border-gray-300 rounded px-2 py-1 outline-none bg-gray-50">
+                                <option value="activo">🤖 IA Activa</option>
+                                <option value="humano">👤 Control Humano</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div id="chat-feed" class="flex-1 overflow-y-auto p-4 space-y-3 flex flex-col">
+                        <div class="m-auto text-center text-gray-400">
+                            <span class="material-symbols-outlined text-4xl text-[#E50914] mb-2">chat_bubble_outline</span>
+                            <h2 class="text-sm font-bold text-gray-700">Seleccioná una conversación</h2>
+                            <p class="text-xs text-gray-400 mt-1">Elegí un chat de la lista para gestionar datos y responder.</p>
+                        </div>
+                    </div>
+
+                    <!-- CAJA DE TEXTO Y ATAJOS -->
+                    <div id="chat-input-container" class="hidden p-3 bg-white border-t border-gray-200 flex gap-2 relative">
+                        <div class="relative">
+                            <button onclick="toggleMenuRespuestas()" class="bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold px-3 py-2 rounded-lg text-xs flex items-center transition" title="Respuestas Rápidas">
+                                ⚡
+                            </button>
+                            <div id="dropdown-respuestas" class="hidden absolute bottom-12 left-0 bg-white border border-gray-200 rounded-lg shadow-xl w-64 p-2 z-50 max-h-48 overflow-y-auto space-y-1"></div>
+                        </div>
+
+                        <input type="text" id="msg-input" onkeypress="if(event.key==='Enter') enviarMensaje()" placeholder="Escribí un mensaje..." class="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-xs focus:ring-1 focus:ring-red-500 focus:outline-none" />
+                        
+                        <button onclick="enviarMensaje()" class="bg-[#E50914] hover:bg-red-700 text-white font-bold px-4 py-2 rounded-lg text-xs transition flex items-center gap-1">
+                            <span>Enviar</span>
+                            <span class="material-symbols-outlined text-sm">send</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- VISTA RESPUESTAS RÁPIDAS -->
+            <div id="vista-respuestas" class="vista-seccion hidden p-6 space-y-4 overflow-y-auto h-full">
+                <div class="flex justify-between items-center">
+                    <div><h2 class="text-xl font-bold">⚡ Respuestas Rápidas</h2><p class="text-xs text-gray-500">Atajos de teclado para operadores (/ubi, /catalogo).</p></div>
+                </div>
+                <div class="bg-white border p-4 rounded-xl space-y-3 shadow-sm max-w-2xl">
+                    <h3 class="font-bold text-xs text-gray-700">Agregar Nueva Respuesta</h3>
+                    <div class="grid grid-cols-3 gap-2">
+                        <input type="text" id="rr-atajo" placeholder="/atajo (ej: /ubi)" class="border p-2 rounded text-xs" />
+                        <input type="text" id="rr-descripcion" placeholder="Descripción corta" class="border p-2 rounded text-xs" />
+                        <button onclick="crearRespuestaRapida()" class="bg-[#E50914] text-white font-bold px-3 py-2 rounded text-xs">+ Guardar</button>
+                    </div>
+                    <textarea id="rr-texto" placeholder="Texto completo a responder..." class="w-full border p-2 rounded text-xs h-20"></textarea>
+                </div>
+                <div id="lista-respuestas-rapidas" class="grid grid-cols-2 gap-4 max-w-4xl"></div>
+            </div>
+
+            <!-- VISTA ETIQUETAS -->
+            <div id="vista-etiquetas" class="vista-seccion hidden p-6 space-y-4 overflow-y-auto h-full">
+                <div class="flex justify-between items-center">
+                    <div><h2 class="text-xl font-bold">🏷️ Administración de Etiquetas</h2><p class="text-xs text-gray-500">Categorización visual de clientes.</p></div>
+                </div>
+                <div class="bg-white border p-4 rounded-xl space-y-3 shadow-sm max-w-xl">
+                    <h3 class="font-bold text-xs text-gray-700">Crear Etiqueta</h3>
+                    <div class="flex gap-2">
+                        <input type="text" id="tag-nombre" placeholder="Nombre (ej: COTIZACIÓN PVC)" class="flex-1 border p-2 rounded text-xs" />
+                        <input type="color" id="tag-color" value="#ca0b0f" class="h-8 w-12 border rounded cursor-pointer" />
+                        <button onclick="crearEtiqueta()" class="bg-[#E50914] text-white font-bold px-4 py-2 rounded text-xs">+ Guardar</button>
+                    </div>
+                </div>
+                <div id="lista-etiquetas" class="bg-white border rounded-xl overflow-hidden shadow-sm max-w-2xl"></div>
+            </div>
+
+            <!-- VISTA DEPARTAMENTOS -->
+            <div id="vista-departamentos" class="vista-seccion hidden p-6 space-y-4 overflow-y-auto h-full">
+                <div class="flex justify-between items-center">
+                    <div><h2 class="text-xl font-bold">🏢 Departamentos / Colas</h2><p class="text-xs text-gray-500">Organización de áreas de atención.</p></div>
+                </div>
+                <div class="bg-white border p-4 rounded-xl space-y-3 shadow-sm max-w-xl">
+                    <h3 class="font-bold text-xs text-gray-700">Agregar Departamento</h3>
+                    <div class="grid grid-cols-3 gap-2">
+                        <input type="text" id="dep-nombre" placeholder="Nombre (ej: Ventas)" class="border p-2 rounded text-xs" />
+                        <input type="text" id="dep-codigo" placeholder="Código (ej: ventas)" class="border p-2 rounded text-xs" />
+                        <button onclick="crearDepartamento()" class="bg-[#E50914] text-white font-bold px-3 py-2 rounded text-xs">+ Crear</button>
+                    </div>
+                </div>
+                <div id="lista-departamentos" class="bg-white border rounded-xl overflow-hidden shadow-sm max-w-2xl"></div>
+            </div>
+
+            <!-- VISTA FLUJOS AUTOMÁTICOS COMPLETA -->
+            <div id="vista-flujos" class="vista-seccion hidden p-6 space-y-6 overflow-y-auto h-full max-w-4xl">
+                <div><h2 class="text-xl font-bold">⌛ Automatización de Flujos y Horarios</h2><p class="text-xs text-gray-500">Configuración comercial para fuera de horario e inactividad.</p></div>
+                
+                <!-- HORARIOS COMERCIALES -->
+                <div class="bg-white border p-5 rounded-xl space-y-4 shadow-sm">
+                    <div class="flex justify-between items-center border-b pb-2">
+                        <h3 class="font-bold text-sm text-gray-900">📅 Fuera de Horario Comercial</h3>
+                        <input type="checkbox" id="flujo-horario-activo" checked class="w-4 h-4 accent-red-600" />
+                    </div>
+                    <div class="space-y-2 text-xs">
+                        <label class="font-semibold text-gray-600">Mensaje Automático de Respuesta fuera de franja:</label>
+                        <textarea id="flujo-horario-msg" class="w-full border p-2 rounded text-xs h-16">Hola! Nuestro horario de atención comercial es de Lunes a Viernes de 8:00 a 17:00 hs. Dejanos tu consulta y te responderemos a primera hora. 😊</textarea>
+                    </div>
+                    
+                    <!-- TABLA DE DÍAS Y HORARIOS -->
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs pt-2">
+                        <div class="flex items-center justify-between border p-2 rounded bg-gray-50">
+                            <span class="font-bold">Lunes a Viernes:</span>
+                            <div class="flex gap-1 items-center">
+                                <input type="time" value="08:00" class="border rounded p-1" />
+                                <span>a</span>
+                                <input type="time" value="17:00" class="border rounded p-1" />
+                            </div>
+                        </div>
+                        <div class="flex items-center justify-between border p-2 rounded bg-gray-50">
+                            <span class="font-bold">Sábados y Domingos:</span>
+                            <span class="text-red-600 font-bold">CERRADO</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- ALERTAS DE INACTIVIDAD -->
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div class="bg-white border p-4 rounded-xl space-y-3 shadow-sm">
+                        <div class="flex justify-between items-center border-b pb-2">
+                            <h3 class="font-bold text-xs">hourglass_empty Espera Prolongada</h3>
+                            <input type="checkbox" checked class="w-4 h-4 accent-red-600" />
+                        </div>
+                        <p class="text-[11px] text-gray-500">Envía aviso si el bot/asesor demora en contestar.</p>
+                        <div>
+                            <label class="text-[10px] text-gray-400 font-bold uppercase">Minutos de disparo</label>
+                            <input type="number" value="10" class="w-full border p-1.5 rounded text-xs mt-1" />
+                        </div>
+                    </div>
+
+                    <div class="bg-white border p-4 rounded-xl space-y-3 shadow-sm">
+                        <div class="flex justify-between items-center border-b pb-2">
+                            <h3 class="font-bold text-xs">🔒 Cierre Inactivo (24hs)</h3>
+                            <input type="checkbox" checked class="w-4 h-4 accent-red-600" />
+                        </div>
+                        <p class="text-[11px] text-gray-500">Aviso antes de que venza la ventana gratuita de Meta.</p>
+                        <div>
+                            <label class="text-[10px] text-gray-400 font-bold uppercase">Horas de espera</label>
+                            <input type="number" value="23" class="w-full border p-1.5 rounded text-xs mt-1" />
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- VISTA CONTROL DE CANALES -->
+            <div id="vista-canales" class="vista-seccion hidden p-6 space-y-6 overflow-y-auto h-full">
+                <div><h2 class="text-xl font-bold">📡 Centro de Control de Canales</h2><p class="text-xs text-gray-500">Configuración de IA por canal.</p></div>
+                <div id="grid-canales" class="grid grid-cols-1 md:grid-cols-3 gap-4"></div>
+
+                <div class="bg-white border border-gray-200 rounded-xl p-4 shadow-sm space-y-3">
+                    <div class="flex items-center justify-between">
+                        <h3 class="font-bold text-sm text-gray-900">📱 Instancias de WhatsApp en Servidor (Evolution API)</h3>
+                        <button onclick="cargarInstanciasEvolution()" class="text-xs bg-gray-100 hover:bg-gray-200 px-2.5 py-1 rounded-md font-semibold text-gray-700">🔄 Actualizar Lista</button>
+                    </div>
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-left text-xs">
+                            <thead class="bg-gray-50 text-gray-500 font-bold border-b border-gray-200">
+                                <tr>
+                                    <th class="p-2">Instancia</th>
+                                    <th class="p-2">Estado</th>
+                                    <th class="p-2">Número Conectado</th>
+                                </tr>
+                            </thead>
+                            <tbody id="tabla-instancias-evolution" class="divide-y divide-gray-100">
+                                <tr><td colspan="3" class="p-3 text-center text-gray-400">Cargando instancias...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+        </main>
+    </div>
+
+    <!-- MODAL NUEVO MENSAJE DIRECTO -->
+    <div id="modal-nuevo-mensaje" class="hidden fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+        <div class="bg-white rounded-xl p-5 w-full max-w-md space-y-4 shadow-2xl">
+            <h3 class="font-bold text-sm text-gray-900 border-b pb-2">Iniciar Nueva Conversación por WhatsApp</h3>
+            <div>
+                <label class="text-[10px] font-bold text-gray-400 uppercase">Número de WhatsApp (con código de país)</label>
+                <input type="text" id="nuevo-num-whatsapp" placeholder="5493413624798" class="w-full border p-2 rounded text-xs mt-1 focus:ring-1 focus:ring-red-500 outline-none" />
+            </div>
+            <div>
+                <label class="text-[10px] font-bold text-gray-400 uppercase">Mensaje Inicial</label>
+                <textarea id="nuevo-texto-whatsapp" placeholder="Hola! Te escribimos de Euroaberturas..." class="w-full border p-2 rounded text-xs mt-1 h-20 focus:ring-1 focus:ring-red-500 outline-none"></textarea>
+            </div>
+            <div class="flex justify-end gap-2 pt-2">
+                <button onclick="cerrarModalNuevo()" class="px-3 py-1.5 bg-gray-100 text-gray-600 rounded text-xs font-bold">Cancelar</button>
+                <button onclick="enviarNuevoMensajeDirecto()" class="px-3 py-1.5 bg-[#E50914] hover:bg-red-700 text-white rounded text-xs font-bold">Enviar Mensaje</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = '/bot_euroaberturas/api';
+        let chatsCargados = [];
+        let filtroCanalActual = 'todos';
+        let filtroEstadoActual = 'activos';
+        let activeSessionId = null;
+
+        const vistas = {
+            'bandeja': { id: 'vista-bandeja', btn: 'btn-bandeja', titulo: 'Bandeja de Entrada' },
+            'flujos': { id: 'vista-flujos', btn: 'btn-flujos', titulo: 'Automatización de Flujos' },
+            'departamentos': { id: 'vista-departamentos', btn: 'btn-departamentos', titulo: 'Departamentos / Colas' },
+            'respuestas': { id: 'vista-respuestas', btn: 'btn-respuestas', titulo: 'Respuestas Rápidas' },
+            'etiquetas': { id: 'vista-etiquetas', btn: 'btn-etiquetas', titulo: 'Etiquetas' },
+            'canales': { id: 'vista-canales', btn: 'btn-canales', titulo: 'Control de Canales' }
+        };
+
+        function toggleMobileSidebar() {
+            document.getElementById('sidebar').classList.toggle('hidden');
+        }
+
+        function cambiarVista(clave) {
+            document.querySelectorAll('.vista-seccion').forEach(el => el.classList.add('hidden'));
+            document.querySelectorAll('.nav-btn').forEach(btn => {
+                btn.classList.remove('bg-red-50', 'text-[#E50914]', 'font-medium');
+                btn.classList.add('text-gray-600');
+            });
+
+            const vista = vistas[clave];
+            if (vista) {
+                document.getElementById(vista.id).classList.remove('hidden');
+                document.getElementById(vista.btn).classList.add('bg-red-50', 'text-[#E50914]', 'font-medium');
+                document.getElementById('titulo-pagina').innerText = vista.titulo;
+            }
+
+            if (clave === 'canales') { cargarCanales(); cargarInstanciasEvolution(); }
+            if (clave === 'respuestas') cargarRespuestasRapidas();
+            if (clave === 'etiquetas') cargarEtiquetas();
+            if (clave === 'departamentos') cargarDepartamentos();
+        }
+
+        function filtrarCanal(tipo) {
+            filtroCanalActual = tipo;
+            document.querySelectorAll('.tab-canal-filter').forEach(btn => {
+                btn.classList.remove('bg-red-600', 'text-white');
+                btn.classList.add('bg-gray-100', 'text-gray-600');
+            });
+            document.getElementById(`tab-canal-${tipo}`).classList.remove('bg-gray-100', 'text-gray-600');
+            document.getElementById(`tab-canal-${tipo}`).classList.add('bg-red-600', 'text-white');
+            renderizarListaChats();
+        }
+
+        function filtrarEstado(estado) {
+            filtroEstadoActual = estado;
+            document.querySelectorAll('.tab-estado-filter').forEach(btn => {
+                btn.classList.remove('bg-white', 'text-gray-800', 'shadow-sm');
+                btn.classList.add('text-gray-500');
+            });
+            document.getElementById(`tab-estado-${estado}`).classList.add('bg-white', 'text-gray-800', 'shadow-sm');
+            renderizarListaChats();
+        }
+
+        function buscarChat() { renderizarListaChats(); }
+
+        async function cargarChats() {
+            try {
+                const res = await fetch(`${API_BASE}/chats`);
+                const data = await res.json();
+                if (data.status === 'ok') {
+                    chatsCargados = data.chats || [];
+                    renderizarListaChats();
+                }
+            } catch(e){}
+        }
+
+        function renderizarListaChats() {
+            const container = document.getElementById('chat-list');
+            const termino = document.getElementById('input-buscar').value.toLowerCase();
+
+            let filtrados = chatsCargados.filter(c => {
+                const id = c.session_id.toLowerCase();
+                const nombre = (c.nombre_cliente || '').toLowerCase();
+                const esCerrado = (c.estado_atencion === 'cerrado');
+
+                const esTg = id.startsWith('tg_');
+                const esWb = id.startsWith('sesion_');
+                const esWa = !esTg && !esWb;
+
+                if (filtroEstadoActual === 'activos' && esCerrado) return false;
+                if (filtroEstadoActual === 'cerrados' && !esCerrado) return false;
+
+                if (filtroCanalActual === 'tg' && !esTg) return false;
+                if (filtroCanalActual === 'wb' && !esWb) return false;
+                if (filtroCanalActual === 'wa' && !esWa) return false;
+
+                if (termino && !id.includes(termino) && !nombre.includes(termino)) return false;
+                return true;
+            });
+
+            if (filtrados.length === 0) {
+                container.innerHTML = `<div class="p-6 text-center text-gray-400 text-xs">Sin conversaciones en este filtro</div>`;
+                return;
+            }
+
+            container.innerHTML = '';
+            filtrados.forEach(c => {
+                const tituloDisplay = c.nombre_cliente ? `${c.nombre_cliente}` : c.session_id;
+                const isActive = c.session_id === activeSessionId;
+                const esNuevo = (c.estado_atencion === 'nuevo');
+
+                const card = document.createElement('div');
+                const bgClass = esNuevo ? 'bg-amber-50/90 font-bold border-l-4 border-amber-500' : (isActive ? 'bg-red-50/60 border-l-4 border-[#E50914]' : '');
+                
+                card.className = `p-3 cursor-pointer transition hover:bg-gray-50 flex flex-col gap-1 ${bgClass}`;
+                card.onclick = () => seleccionarChat(c.session_id, c.estado_bot);
+
+                card.innerHTML = `
+                    <div class="flex items-center justify-between">
+                        <span class="text-xs text-gray-900 truncate flex items-center gap-1.5">
+                            ${esNuevo ? '<span class="w-2 h-2 rounded-full bg-amber-500 inline-block animate-pulse"></span>' : ''}
+                            ${tituloDisplay}
+                        </span>
+                        <span class="text-[9px] font-bold px-2 py-0.5 rounded-full ${esNuevo ? 'bg-amber-100 text-amber-800 border border-amber-300' : (c.estado_atencion==='cerrado'?'bg-emerald-100 text-emerald-800':'bg-gray-100 text-gray-600')}">
+                            ${(c.estado_atencion||'nuevo').toUpperCase()}
+                        </span>
+                    </div>
+                    ${c.nombre_cliente ? `<div class="text-[10px] text-gray-400">${c.session_id}</div>` : ''}
+                    ${c.etiquetas ? `<div class="text-[9px] text-red-600 font-semibold truncate">🏷️ ${c.etiquetas}</div>` : ''}
+                    <p class="text-xs ${esNuevo ? 'text-gray-900 font-semibold' : 'text-gray-500'} truncate">${c.ultimo_mensaje || 'Sin mensajes'}</p>
+                `;
+                container.appendChild(card);
+            });
+        }
+
+        async function seleccionarChat(sessionId, estadoBot) {
+            activeSessionId = sessionId;
+            document.getElementById('chat-header-active').classList.remove('hidden');
+            document.getElementById('chat-input-container').classList.remove('hidden');
+            document.getElementById('active-user-title').innerText = sessionId;
+            document.getElementById('botModeSelect').value = estadoBot;
+
+            document.getElementById('columna-lista-chats').classList.add('hidden', 'md:flex');
+            document.getElementById('columna-chat-activo').classList.remove('hidden');
+            document.getElementById('columna-chat-activo').classList.add('flex');
+
+            const chatActual = chatsCargados.find(c => c.session_id === sessionId);
+            if (chatActual) {
+                document.getElementById('input-nombre-cliente').value = chatActual.nombre_cliente || '';
+                document.getElementById('input-etiquetas').value = chatActual.etiquetas || '';
+                document.getElementById('select-estado-atencion').value = chatActual.estado_atencion || 'nuevo';
+            }
+
+            await cargarComboEtiquetas();
+            renderizarListaChats();
+
+            try {
+                const res = await fetch(`${API_BASE}/chat/${sessionId}`);
+                const data = await res.json();
+                const feed = document.getElementById('chat-feed');
+                feed.innerHTML = '';
+
+                data.mensajes.forEach(m => {
+                    const bubble = document.createElement('div');
+                    let align = 'self-start bg-white text-gray-800 border border-gray-200';
+                    let sender = 'Cliente';
+
+                    if (m.rol === 'model') {
+                        align = 'self-end bg-red-50 text-red-950 border border-red-200';
+                        sender = 'IA (Bot)';
+                    } else if (m.rol === 'human_operator') {
+                        align = 'self-end bg-blue-50 text-blue-950 border border-blue-200';
+                        sender = 'Operador';
+                    }
+
+                    bubble.className = `max-w-[85%] md:max-w-[75%] px-3 py-2 rounded-xl text-xs shadow-sm ${align}`;
+                    bubble.innerHTML = `<div class="text-[9px] font-black uppercase mb-1 opacity-60">${sender}</div>${m.texto}`;
+                    feed.appendChild(bubble);
+                });
+
+                feed.scrollTop = feed.scrollHeight;
+            } catch(e){}
+        }
+
+        function volverAListaMobile() {
+            document.getElementById('columna-lista-chats').classList.remove('hidden');
+            document.getElementById('columna-chat-activo').classList.add('hidden');
+            document.getElementById('columna-chat-activo').classList.remove('flex');
+        }
+
+        async function cargarComboEtiquetas() {
+            try {
+                const res = await fetch(`${API_BASE}/admin/etiquetas`);
+                const data = await res.json();
+                const select = document.getElementById('select-etiqueta-rapida');
+                if (!select) return;
+                select.innerHTML = '<option value="">+ Etiqueta</option>';
+                (data.items || []).forEach(e => {
+                    select.innerHTML += `<option value="${e.nombre}">${e.nombre}</option>`;
+                });
+            } catch(e){}
+        }
+
+        function agregarEtiquetaSeleccionada(valor) {
+            if (!valor) return;
+            const input = document.getElementById('input-etiquetas');
+            const actuales = input.value.split(',').map(s => s.trim()).filter(Boolean);
+            if (!actuales.includes(valor)) {
+                actuales.push(valor);
+                input.value = actuales.join(', ');
+                guardarDatosChat();
+            }
+            document.getElementById('select-etiqueta-rapida').value = '';
+        }
+
+        async function guardarDatosChat() {
+            if (!activeSessionId) return;
+            const fd = new FormData();
+            fd.append('session_id', activeSessionId);
+            fd.append('nombre_cliente', document.getElementById('input-nombre-cliente').value);
+            fd.append('etiquetas', document.getElementById('input-etiquetas').value);
+            fd.append('estado_atencion', document.getElementById('select-estado-atencion').value);
+
+            await fetch(`${API_BASE}/actualizar-chat`, { method: 'POST', body: fd });
+            cargarChats();
+        }
+
+        async function enviarMensaje() {
+            const input = document.getElementById('msg-input');
+            const texto = input.value.trim();
+            if (!texto || !activeSessionId) return;
+
+            const fd = new FormData();
+            fd.append('session_id', activeSessionId);
+            fd.append('texto', texto);
+
+            await fetch(`${API_BASE}/enviar-mensaje`, { method: 'POST', body: fd });
+            input.value = '';
+            seleccionarChat(activeSessionId, document.getElementById('botModeSelect').value);
+        }
+
+        async function cambiarEstadoBot(val) {
+            if (!activeSessionId) return;
+            const fd = new FormData();
+            fd.append('session_id', activeSessionId);
+            fd.append('estado', val);
+            await fetch(`${API_BASE}/cambiar-estado`, { method: 'POST', body: fd });
+            cargarChats();
+        }
+
+        async function toggleMenuRespuestas() {
+            const menu = document.getElementById('dropdown-respuestas');
+            menu.classList.toggle('hidden');
+            
+            if (!menu.classList.contains('hidden')) {
+                const res = await fetch(`${API_BASE}/admin/respuestas-rapidas`);
+                const data = await res.json();
+                menu.innerHTML = '';
+                (data.items || []).forEach(r => {
+                    const item = document.createElement('div');
+                    item.className = 'p-2 hover:bg-red-50 cursor-pointer rounded text-xs border-b border-gray-100';
+                    item.innerHTML = `<strong class="text-[#E50914]">${r.atajo}</strong> &mdash; <span class="text-gray-600">${r.descripcion||''}</span>`;
+                    item.onclick = () => {
+                        document.getElementById('msg-input').value = r.texto;
+                        menu.classList.add('hidden');
+                    };
+                    menu.appendChild(item);
+                });
+            }
+        }
+
+        function abrirModalNuevo() { document.getElementById('modal-nuevo-mensaje').classList.remove('hidden'); }
+        function cerrarModalNuevo() { document.getElementById('modal-nuevo-mensaje').classList.add('hidden'); }
+
+        async function enviarNuevoMensajeDirecto() {
+            const numero = document.getElementById('nuevo-num-whatsapp').value.trim();
+            const texto = document.getElementById('nuevo-texto-whatsapp').value.trim();
+
+            if (!numero || !texto) return;
+
+            const fd = new FormData();
+            fd.append('session_id', numero);
+            fd.append('texto', texto);
+
+            await fetch(`${API_BASE}/enviar-mensaje`, { method: 'POST', body: fd });
+
+            document.getElementById('nuevo-num-whatsapp').value = '';
+            document.getElementById('nuevo-texto-whatsapp').value = '';
+            cerrarModalNuevo();
+            
+            await cargarChats();
+            seleccionarChat(numero, 'humano');
+        }
+
+        async function cargarRespuestasRapidas() {
+            const container = document.getElementById('lista-respuestas-rapidas');
+            const res = await fetch(`${API_BASE}/admin/respuestas-rapidas`);
+            const data = await res.json();
+            container.innerHTML = '';
+            (data.items || []).forEach(r => {
+                const card = document.createElement('div');
+                card.className = 'bg-white border p-3 rounded-xl space-y-1 shadow-sm';
+                card.innerHTML = `
+                    <div class="flex justify-between items-center"><span class="bg-red-50 text-[#E50914] font-bold px-2 py-0.5 rounded text-xs">${r.atajo}</span><span class="text-[10px] text-gray-400">${r.descripcion||''}</span></div>
+                    <p class="text-xs text-gray-700">${r.texto}</p>
+                `;
+                container.appendChild(card);
+            });
+        }
+
+        async function crearRespuestaRapida() {
+            const atajo = document.getElementById('rr-atajo').value;
+            const desc = document.getElementById('rr-descripcion').value;
+            const texto = document.getElementById('rr-texto').value;
+            if (!atajo || !texto) return;
+
+            const fd = new FormData();
+            fd.append('atajo', atajo);
+            fd.append('descripcion', desc);
+            fd.append('texto', texto);
+
+            await fetch(`${API_BASE}/admin/respuestas-rapidas/crear`, { method: 'POST', body: fd });
+            document.getElementById('rr-atajo').value = '';
+            document.getElementById('rr-descripcion').value = '';
+            document.getElementById('rr-texto').value = '';
+            cargarRespuestasRapidas();
+        }
+
+        async function cargarEtiquetas() {
+            const container = document.getElementById('lista-etiquetas');
+            const res = await fetch(`${API_BASE}/admin/etiquetas`);
+            const data = await res.json();
+            let html = '<table class="w-full text-left text-xs"><thead class="bg-gray-50 border-b"><tr><th class="p-3">Nombre</th><th class="p-3">Color</th><th class="p-3">Tipo</th></tr></thead><tbody>';
+            (data.items || []).forEach(e => {
+                html += `<tr class="border-b"><td class="p-3 font-bold">${e.nombre}</td><td class="p-3"><span class="inline-block w-3 h-3 rounded-full mr-1" style="background:${e.color_hex}"></span>${e.color_hex}</td><td class="p-3"><span class="bg-blue-50 text-blue-600 px-2 py-0.5 rounded text-[10px] uppercase font-bold">${e.tipo}</span></td></tr>`;
+            });
+            html += '</tbody></table>';
+            container.innerHTML = html;
+        }
+
+        async function crearEtiqueta() {
+            const nombre = document.getElementById('tag-nombre').value;
+            const color = document.getElementById('tag-color').value;
+            if (!nombre) return;
+
+            const fd = new FormData();
+            fd.append('nombre', nombre);
+            fd.append('color_hex', color);
+
+            await fetch(`${API_BASE}/admin/etiquetas/crear`, { method: 'POST', body: fd });
+            document.getElementById('tag-nombre').value = '';
+            await cargarEtiquetas();
+            await cargarComboEtiquetas();
+        }
+
+        async function cargarDepartamentos() {
+            const container = document.getElementById('lista-departamentos');
+            const res = await fetch(`${API_BASE}/admin/departamentos`);
+            const data = await res.json();
+            let html = '<table class="w-full text-left text-xs"><thead class="bg-gray-50 border-b"><tr><th class="p-3">Nombre</th><th class="p-3">Código</th><th class="p-3">Estado</th></tr></thead><tbody>';
+            (data.items || []).forEach(d => {
+                html += `<tr class="border-b"><td class="p-3 font-bold">${d.nombre}</td><td class="p-3 font-mono text-gray-500">${d.codigo}</td><td class="p-3"><span class="bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded-full text-[10px] font-bold">ACTIVO</span></td></tr>`;
+            });
+            html += '</tbody></table>';
+            container.innerHTML = html;
+        }
+
+        async function crearDepartamento() {
+            const nombre = document.getElementById('dep-nombre').value;
+            const codigo = document.getElementById('dep-codigo').value;
+            if (!nombre || !codigo) return;
+
+            const fd = new FormData();
+            fd.append('nombre', nombre);
+            fd.append('codigo', codigo);
+
+            await fetch(`${API_BASE}/admin/departamentos/crear`, { method: 'POST', body: fd });
+            document.getElementById('dep-nombre').value = '';
+            document.getElementById('dep-codigo').value = '';
+            cargarDepartamentos();
+        }
+
+        async function cargarCanales() {
+            try {
+                const res = await fetch(`${API_BASE}/admin/canales`);
+                const data = await res.json();
+                if (data.status !== 'ok') return;
+
+                const grid = document.getElementById('grid-canales');
+                grid.innerHTML = '';
+
+                data.canales.forEach(c => {
+                    const card = document.createElement('div');
+                    card.className = 'bg-white border border-gray-200 rounded-xl p-4 flex flex-col justify-between space-y-4 shadow-sm';
+                    card.innerHTML = `
+                        <div>
+                            <div class="flex justify-between items-start mb-3">
+                                <div>
+                                    <h3 class="font-bold text-sm text-gray-900">${c.nombre}</h3>
+                                    <span class="text-[10px] text-gray-400 uppercase font-semibold">${c.tipo}</span>
+                                </div>
+                                <span class="bg-emerald-50 text-emerald-600 px-2 py-0.5 rounded-full text-[10px] font-bold border border-emerald-200">ACTIVO</span>
+                            </div>
+                            <div class="text-xs text-gray-600 mb-2">Modo: <strong>${c.modo.replace('_', ' ').toUpperCase()}</strong></div>
+                        </div>
+                        <select onchange="cambiarModoCanalDirecto('${c.slug}', this.value)" class="w-full border border-gray-300 rounded-lg p-2 text-xs font-bold bg-gray-50 outline-none">
+                            <option value="ia_hibrida" ${c.modo==='ia_hibrida'?'selected':''}>IA Hibrida (Activa)</option>
+                            <option value="solo_humano" ${c.modo==='solo_humano'?'selected':''}>Entrenamiento / Solo Humano</option>
+                            <option value="desactivado" ${c.modo==='desactivado'?'selected':''}>Desactivado</option>
+                        </select>
+                    `;
+                    grid.appendChild(card);
+                });
+            } catch(e){}
+        }
+
+        async function cargarInstanciasEvolution() {
+            const tbody = document.getElementById('tabla-instancias-evolution');
+            try {
+                const res = await fetch(`${API_BASE}/admin/evolution-instancias`);
+                const data = await res.json();
+
+                if (!Array.isArray(data)) {
+                    tbody.innerHTML = `<tr><td colspan="3" class="p-3 text-center text-gray-400">Sin instancias conectadas</td></tr>`;
+                    return;
+                }
+
+                tbody.innerHTML = '';
+                data.forEach(item => {
+                    const name = item.instance?.instanceName || item.name || 'Desconocida';
+                    const state = item.instance?.state || item.connectionStatus || 'close';
+                    const number = item.instance?.owner || item.ownerJid || 'Sin número';
+
+                    let badgeState = '<span class="bg-emerald-50 text-emerald-700 px-2 py-0.5 rounded-full text-[10px] font-bold border border-emerald-200">ONLINE</span>';
+                    if (state === 'connecting') {
+                        badgeState = '<span class="bg-amber-50 text-amber-700 px-2 py-0.5 rounded-full text-[10px] font-bold border border-amber-200">ESPERANDO QR</span>';
+                    } else if (state === 'close') {
+                        badgeState = '<span class="bg-red-50 text-red-700 px-2 py-0.5 rounded-full text-[10px] font-bold border border-red-200">DESCONECTADO</span>';
+                    }
+
+                    const tr = document.createElement('tr');
+                    tr.innerHTML = `
+                        <td class="p-2 font-bold text-gray-800">${name}</td>
+                        <td class="p-2">${badgeState}</td>
+                        <td class="p-2 font-mono text-gray-600">${number.replace('@s.whatsapp.net', '')}</td>
+                    `;
+                    tbody.appendChild(tr);
+                });
+            } catch(e) {
+                tbody.innerHTML = `<tr><td colspan="3" class="p-3 text-center text-red-500">Error conectando a Evolution API</td></tr>`;
+            }
+        }
+
+        async function cambiarModoCanalDirecto(slug, modo) {
+            const fd = new FormData();
+            fd.append('slug', slug);
+            fd.append('modo', modo);
+            await fetch(`${API_BASE}/admin/canales/cambiar-modo`, { method: 'POST', body: fd });
+            cargarCanales();
+        }
+
+        async function cambiarModoGlobalWhatsApp(modo) {
+            await cambiarModoCanalDirecto('whatsapp', modo);
+        }
+
+        async function sincronizarEstadoModoWhatsApp() {
+            try {
+                const res = await fetch(`${API_BASE}/admin/canales`);
+                const data = await res.json();
+                const wa = data.canales.find(c => c.slug === 'whatsapp');
+                if (wa) document.getElementById('globalModoSelect').value = wa.modo;
+            } catch(e){}
+        }
+
+        cargarChats();
+        cargarComboEtiquetas();
+        sincronizarEstadoModoWhatsApp();
+        setInterval(cargarChats, 4000);
+    </script>
+</body>
+</html>
