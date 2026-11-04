@@ -508,6 +508,42 @@
             return html + (resto ? `<div>${resto}</div>` : '');
         }
 
+        function fechaDeMensaje(m) {
+            const k = Object.keys(m).find(x => /fecha|created|creado|time|hora/i.test(x) && m[x]);
+            if (!k) return null;
+            const d = new Date(String(m[k]).replace(' ', 'T'));
+            return isNaN(d) ? null : d;
+        }
+        function etiquetaDia(d) {
+            const hoy = new Date(), ayer = new Date(Date.now() - 86400000);
+            const mismo = (a, b) => a.toDateString() === b.toDateString();
+            if (mismo(d, hoy)) return 'Hoy';
+            if (mismo(d, ayer)) return 'Ayer';
+            return d.toLocaleDateString('es-AR', { weekday: 'long', day: '2-digit', month: '2-digit', year: 'numeric' });
+        }
+        function pintarMensajes(feed, ms) {
+            let diaPrevio = null;
+            ms.forEach(m => {
+                const f = fechaDeMensaje(m);
+                if (f && f.toDateString() !== diaPrevio) {
+                    diaPrevio = f.toDateString();
+                    const sep = document.createElement('div');
+                    sep.className = 'self-center text-[10px] font-bold text-gray-500 bg-gray-200 rounded-full px-3 py-0.5 my-2 capitalize';
+                    sep.textContent = etiquetaDia(f);
+                    feed.appendChild(sep);
+                }
+                const bubble = document.createElement('div');
+                let align = 'self-start bg-white text-gray-800 border border-gray-200', sender = 'Cliente';
+                if (m.rol === 'model') { align = 'self-end bg-red-50 text-red-950 border border-red-200'; sender = 'IA (Bot)'; }
+                else if (m.rol === 'human_operator') { align = 'self-end bg-blue-50 text-blue-950 border border-blue-200'; sender = 'Operador'; }
+                const hora = f ? f.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' }) : '';
+                bubble.className = `max-w-[85%] md:max-w-[75%] px-3 py-2 rounded-xl text-xs shadow-sm ${align}`;
+                bubble.innerHTML = `<div class="text-[9px] font-black uppercase mb-1 opacity-60">${sender}</div>${renderTextoMensaje(m.texto)}` +
+                    (hora ? `<div class="text-[9px] text-right opacity-50 mt-1">${hora}</div>` : '');
+                feed.appendChild(bubble);
+            });
+        }
+
         async function seleccionarChat(sessionId, estadoBot) {
             activeSessionId = sessionId;
             document.getElementById('chat-header-active').classList.remove('hidden');
@@ -535,23 +571,7 @@
                 const feed = document.getElementById('chat-feed');
                 feed.innerHTML = '';
 
-                data.mensajes.forEach(m => {
-                    const bubble = document.createElement('div');
-                    let align = 'self-start bg-white text-gray-800 border border-gray-200';
-                    let sender = 'Cliente';
-
-                    if (m.rol === 'model') {
-                        align = 'self-end bg-red-50 text-red-950 border border-red-200';
-                        sender = 'IA (Bot)';
-                    } else if (m.rol === 'human_operator') {
-                        align = 'self-end bg-blue-50 text-blue-950 border border-blue-200';
-                        sender = 'Operador';
-                    }
-
-                    bubble.className = `max-w-[85%] md:max-w-[75%] px-3 py-2 rounded-xl text-xs shadow-sm ${align}`;
-                    bubble.innerHTML = `<div class="text-[9px] font-black uppercase mb-1 opacity-60">${sender}</div>${renderTextoMensaje(m.texto)}`;
-                    feed.appendChild(bubble);
-                });
+                pintarMensajes(feed, data.mensajes || []);
 
                 feed.scrollTop = feed.scrollHeight;
             } catch(e){}
@@ -866,15 +886,7 @@
                 const feed = document.getElementById('chat-feed');
                 const abajo = feed.scrollHeight - feed.scrollTop - feed.clientHeight < 80;
                 feed.innerHTML = '';
-                ms.forEach(m => {
-                    const bubble = document.createElement('div');
-                    let align = 'self-start bg-white text-gray-800 border border-gray-200', sender = 'Cliente';
-                    if (m.rol === 'model') { align = 'self-end bg-red-50 text-red-950 border border-red-200'; sender = 'IA (Bot)'; }
-                    else if (m.rol === 'human_operator') { align = 'self-end bg-blue-50 text-blue-950 border border-blue-200'; sender = 'Operador'; }
-                    bubble.className = `max-w-[85%] md:max-w-[75%] px-3 py-2 rounded-xl text-xs shadow-sm ${align}`;
-                    bubble.innerHTML = `<div class="text-[9px] font-black uppercase mb-1 opacity-60">${sender}</div>${renderTextoMensaje(m.texto)}`;
-                    feed.appendChild(bubble);
-                });
+                pintarMensajes(feed, ms);
                 if (abajo) feed.scrollTop = feed.scrollHeight;
             } catch(e){}
         }

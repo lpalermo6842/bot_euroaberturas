@@ -96,6 +96,18 @@ def init_log_table():
                 db.commit()
             except Exception:
                 pass  # ya existe
+        # La tabla mensajes (panel) necesita fecha/hora. Se agrega si no hay ninguna columna de fecha.
+        try:
+            c.execute("""SELECT COUNT(*) FROM information_schema.COLUMNS
+                         WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'mensajes'
+                         AND DATA_TYPE IN ('datetime','timestamp')""")
+            if c.fetchone()[0] == 0:
+                c.execute("ALTER TABLE mensajes ADD COLUMN fecha DATETIME NULL")
+                c.execute("ALTER TABLE mensajes MODIFY fecha DATETIME NULL DEFAULT CURRENT_TIMESTAMP")
+                db.commit()
+                print("✅ Columna mensajes.fecha creada")
+        except Exception as e:
+            print(f"❌ No se pudo preparar mensajes.fecha: {e}")
         c.close(); db.close()
         os.makedirs(MEDIA_DIR, exist_ok=True)
     except Exception as e:
