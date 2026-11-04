@@ -31,6 +31,16 @@ EVOLUTION_API_URL = os.getenv("EVOLUTION_API_URL", "http://127.0.0.1:8085")
 EVOLUTION_API_KEY = os.getenv("EVOLUTION_API_KEY", "MiClaveSecreta123")
 INSTANCE_NAME = "euroaberturas"
 
+# --- BRIDGE DIPA (WhatsApp) ---
+# Si BRIDGE_API_KEY esta definida, se usa el bridge en lugar de Evolution directo.
+BRIDGE_URL = os.getenv("BRIDGE_URL", "https://bot.dipa.ar/bridge").rstrip("/")
+BRIDGE_API_KEY = os.getenv("BRIDGE_API_KEY", "")
+BRIDGE_INSTANCE = os.getenv("BRIDGE_INSTANCE", "euroaberturas")
+BRIDGE_WEBHOOK_URL = os.getenv("BRIDGE_WEBHOOK_URL", "")  # URL publica (o interna) de /webhook/whatsapp
+
+def _bridge_headers():
+    return {"Authorization": f"Bearer {BRIDGE_API_KEY}", "Content-Type": "application/json"}
+
 def cargar_prompt_sistema():
     path = "/var/www/dipa/bot_euroaberturas/prompt.txt"
     if os.path.exists(path):
@@ -48,6 +58,18 @@ def get_db():
     )
 
 async def enviar_respuesta_whatsapp(numero: str, texto: str):
+    if BRIDGE_API_KEY:
+        try:
+            async with httpx.AsyncClient() as http_client:
+                await http_client.post(
+                    f"{BRIDGE_URL}/api/instancias/{BRIDGE_INSTANCE}/send-text",
+                    headers=_bridge_headers(),
+                    json={"number": numero, "text": texto},
+                    timeout=15.0
+                )
+        except Exception as e:
+            print(f"❌ Error enviando por bridge: {e}")
+        return
     async with httpx.AsyncClient() as http_client:
         try:
             await http_client.post(
@@ -345,6 +367,55 @@ async def webhook_whatsapp(request: Request, background_tasks: BackgroundTasks):
         return {"status": "success"}
     except Exception as e:
         return {"status": "error", "detalle": str(e)}
+
+# --- CONEXION WHATSAPP VIA BRIDGE ---
+async def _bridge(metodo: str, ruta: str, body=None):
+    if not BRIDGE_API_KEY:
+        return 0, {"error": "Falta BRIDGE_API_KEY en .env"}
+    async with httpx.AsyncClient() as http_client:
+        res = await http_client.request(
+            metodo, f"{BRIDGE_URL}{ruta}", headers=_bridge_headers(), json=body, timeout=20.0
+        )
+        try:
+            return res.status_code, res.json()
+        except Exception:
+            return res.status_code, {"raw": res.text}
+
+@app.post("/api/conexion-crear")
+@app.post("/bot_euroaberturas/api/conexion-crear")
+async def conexion_crear():
+    """Crea la instancia (si no existe) y configura el webhook hacia este bot."""
+    try:
+        cod, crear = await _bridge("POST", "/api/instancias", {"nombre": BRIDGE_INSTANCE})
+        if cod not in (200, 201, 409):
+            return {"status": "error", "paso": "crear", "detalle": crear}
+        webhook = None
+        if BRIDGE_WEBHOOK_URL:
+            _, webhook = await _bridge(
+                "POST", f"/api/instancias/{BRIDGE_INSTANCE}/webhook",
+                {"url": BRIDGE_WEBHOOK_URL, "events": ["MESSAGES_UPSERT"], "base64": False}
+            )
+        return {"status": "ok", "instancia": BRIDGE_INSTANCE, "crear": crear, "webhook": webhook}
+    except Exception as e:
+        return {"status": "error", "detalle": str(e)}
+
+@app.get("/api/conexion-qr")
+@app.get("/bot_euroaberturas/api/conexion-qr")
+async def conexion_qr():
+    try:
+        _, data = await _bridge("GET", f"/api/instancias/{BRIDGE_INSTANCE}/qr")
+        return data
+    except Exception as e:
+        return {"error": str(e)}
+
+@app.get("/api/conexion-estado")
+@app.get("/bot_euroaberturas/api/conexion-estado")
+async def conexion_estado():
+    try:
+        _, data = await _bridge("GET", f"/api/instancias/{BRIDGE_INSTANCE}/estado")
+        return data
+    except Exception as e:
+        return {"error": str(e)}
 
 # --- ENDPOINTS API ERP / ADMIN ---
 @app.get("/api/chats")
