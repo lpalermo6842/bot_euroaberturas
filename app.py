@@ -167,17 +167,19 @@ def log_mensaje(canal, instancia, session_id, direccion, tipo, texto,
 init_log_table()
 
 async def enviar_respuesta_whatsapp(numero: str, texto: str):
-    if WHATSAPP_SOLO_ESCUCHA:
-        return
+    # OJO: WHATSAPP_SOLO_ESCUCHA se controla en el webhook (respuestas automaticas);
+    # los mensajes del operador desde el panel siempre se envian.
     if BRIDGE_API_KEY:
         try:
             async with httpx.AsyncClient() as http_client:
-                await http_client.post(
+                res = await http_client.post(
                     f"{BRIDGE_URL}/api/instancias/{BRIDGE_INSTANCE}/send-text",
                     headers=_bridge_headers(),
                     json={"number": numero, "text": texto},
                     timeout=15.0
                 )
+                if res.status_code >= 300:
+                    print(f"❌ Bridge send-text {res.status_code} a {numero}: {res.text[:300]}")
         except Exception as e:
             print(f"❌ Error enviando por bridge: {e}")
         return
