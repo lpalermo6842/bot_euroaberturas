@@ -450,6 +450,24 @@ from datetime import datetime, timedelta
 def _normalizar(t):
     return unicodedata.normalize("NFD", (t or "").lower()).encode("ascii", "ignore").decode()
 
+_PALABRAS_CIERRE = {
+    "gracias", "gracia", "muchas", "mil", "ok", "oka", "okey", "okay", "dale", "daleee", "chau", "chao", "perfecto",
+    "listo", "genial", "buenisimo", "excelente", "bueno", "buenas", "bien", "si", "sii", "saludos", "abrazo",
+    "hasta", "luego", "despues", "entendido", "claro", "joya", "barbaro", "de", "nada", "igualmente", "ahh", "ah",
+    "ahi", "estamos", "en", "contacto", "gracais", "grax", "gracs", "vale", "fenomeno", "buen", "dia", "tarde", "noche",
+}
+
+def es_cierre(texto):
+    """True si el mensaje es solo una despedida/agradecimiento y no espera respuesta."""
+    import re
+    t = _normalizar(texto)
+    if t.startswith("[") or "[[media" in t:
+        return False  # imagenes, audios, documentos: si esperan atencion
+    palabras = re.findall(r"[a-z0-9]+", t)
+    if not palabras:
+        return True  # solo emojis o signos (👍, ...)
+    return len(palabras) <= 6 and all(p in _PALABRAS_CIERRE for p in palabras)
+
 def cargar_categorias():
     ruta = os.path.join(os.path.dirname(os.path.abspath(__file__)), "categorias.json")
     try:
@@ -515,7 +533,7 @@ async def dashboard_datos(dias: int = 30):
                 if m["direccion"] == "entrante":
                     entrantes += 1
                     d["entrantes"] += 1
-                    if pendiente is None:
+                    if pendiente is None and not es_cierre(m["texto"]):
                         pendiente = m["fecha"]
                     ultimo_cliente = m["texto"] or ""
                     texto_cliente.append(_normalizar(m["texto"]))
