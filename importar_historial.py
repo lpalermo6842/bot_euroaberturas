@@ -243,6 +243,14 @@ def importar(limite):
             )
             nuevos += 1
 
+        if conv_id:
+            nombres = [n["nombre"] for n in norm if not n["from_me"] and n["nombre"] and n["nombre"] != n["numero"]]
+            if nombres:
+                cur.execute(
+                    "UPDATE conversaciones SET nombre_cliente=%s WHERE id=%s AND (nombre_cliente IS NULL OR nombre_cliente='')",
+                    (nombres[-1][:120], conv_id),
+                )
+
         if conv_id and nuevos:
             cur.execute(
                 "SELECT texto FROM mensajes WHERE conversacion_id=%s ORDER BY `timestamp` DESC, id DESC LIMIT 1",

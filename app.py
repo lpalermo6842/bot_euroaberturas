@@ -213,6 +213,22 @@ def log_mensaje(canal, instancia, session_id, direccion, tipo, texto,
 
 init_log_table()
 
+def guardar_nombre_cliente(numero, push_name):
+    """Completa conversaciones.nombre_cliente con el nombre de perfil de WhatsApp si esta vacio."""
+    nombre = (push_name or "").strip()
+    if not nombre or nombre == numero:
+        return
+    try:
+        db = get_db()
+        c = db.cursor()
+        c.execute(
+            "UPDATE conversaciones SET nombre_cliente = %s WHERE session_id = %s AND (nombre_cliente IS NULL OR nombre_cliente = '')",
+            (nombre[:120], numero),
+        )
+        db.commit(); c.close(); db.close()
+    except Exception as e:
+        print(f"❌ Error guardando nombre: {e}")
+
 async def enviar_respuesta_whatsapp(numero: str, texto: str):
     # OJO: WHATSAPP_SOLO_ESCUCHA se controla en el webhook (respuestas automaticas);
     # los mensajes del operador desde el panel siempre se envian.
@@ -698,6 +714,9 @@ async def webhook_whatsapp(request: Request, background_tasks: BackgroundTasks):
                     origen_rol=rol_asignado,
                     canal_slug="whatsapp"
                 )
+
+                if not is_from_me:
+                    guardar_nombre_cliente(numero, msg_data.get("pushName"))
 
                 if respuesta and not is_from_me and not WHATSAPP_SOLO_ESCUCHA:
                     log_mensaje("whatsapp", BRIDGE_INSTANCE, numero, "saliente_bot", "conversation", respuesta)
