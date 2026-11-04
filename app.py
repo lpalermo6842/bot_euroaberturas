@@ -654,6 +654,10 @@ async def webhook_whatsapp(request: Request, background_tasks: BackgroundTasks):
             remote_jid = key.get("remoteJid", "")
             es_grupo = "@g.us" in remote_jid
             numero = remote_jid.split("@")[0]
+            # Si el chat viene como ID interno (@lid), usar el telefono real cuando WhatsApp lo informa
+            alt_jid = key.get("remoteJidAlt") or ""
+            if remote_jid.endswith("@lid") and alt_jid.endswith("@s.whatsapp.net"):
+                numero = alt_jid.split("@")[0]
             is_from_me = key.get("fromMe", False)
             rol_asignado = "human_operator" if is_from_me else "user"
 
