@@ -3,3 +3,4 @@ venv/
 nohup.out
 __pycache__/
 *.pyc
+media/

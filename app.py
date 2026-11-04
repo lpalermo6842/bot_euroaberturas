@@ -1,4 +1,5 @@
 import asyncio
+import re
 import json
 import os
 from typing import List, Optional
@@ -41,6 +42,13 @@ BRIDGE_WEBHOOK_URL = os.getenv("BRIDGE_WEBHOOK_URL", "")  # URL publica (o inter
 # Si es 1, el bot NUNCA responde por WhatsApp (solo guarda todo para analisis).
 WHATSAPP_SOLO_ESCUCHA = os.getenv("WHATSAPP_SOLO_ESCUCHA", "0") == "1"
 
+# Multimedia: se guarda en disco. MEDIA_ANALISIS=1 transcribe audios / describe imagenes con Gemini.
+import base64, uuid, mimetypes
+MEDIA_DIR = os.getenv("MEDIA_DIR", os.path.join(os.path.dirname(os.path.abspath(__file__)), "media"))
+MEDIA_ANALISIS = os.getenv("MEDIA_ANALISIS", "0") == "1"
+MEDIA_MAX_BYTES = 25 * 1024 * 1024
+MEDIA_TIPOS = ("imageMessage", "videoMessage", "audioMessage", "documentMessage", "stickerMessage")
+
 def _bridge_headers():
     return {"Authorization": f"Bearer {BRIDGE_API_KEY}", "Content-Type": "application/json"}
 
@@ -81,20 +89,76 @@ def init_log_table():
             UNIQUE KEY uq_wa (wa_message_id),
             KEY ix_sess (session_id, fecha)
         ) CHARACTER SET utf8mb4""")
-        db.commit(); c.close(); db.close()
+        db.commit()
+        for col in ("archivo VARCHAR(255)", "mime VARCHAR(100)", "analisis MEDIUMTEXT"):
+            try:
+                c.execute(f"ALTER TABLE mensajes_log ADD COLUMN {col}")
+                db.commit()
+            except Exception:
+                pass  # ya existe
+        c.close(); db.close()
+        os.makedirs(MEDIA_DIR, exist_ok=True)
     except Exception as e:
         print(f"❌ No se pudo crear mensajes_log: {e}")
 
+def extraer_media(msg_data, message_content):
+    """Devuelve (nombre_archivo, mime, bytes) si el mensaje trae multimedia en base64."""
+    try:
+        for k in MEDIA_TIPOS:
+            sub = message_content.get(k)
+            if not sub:
+                continue
+            b64 = message_content.get("base64") or msg_data.get("base64") or sub.get("base64")
+            if not b64:
+                return None
+            if "," in b64[:80]:
+                b64 = b64.split(",", 1)[1]
+            datos = base64.b64decode(b64)
+            if len(datos) > MEDIA_MAX_BYTES:
+                return None
+            mime = (sub.get("mimetype") or "application/octet-stream").split(";")[0]
+            ext = mimetypes.guess_extension(mime) or ".bin"
+            if mime.startswith("audio/ogg"):
+                ext = ".ogg"
+            nombre = f"{uuid.uuid4().hex}{ext}"
+            with open(os.path.join(MEDIA_DIR, nombre), "wb") as f:
+                f.write(datos)
+            return nombre, mime, datos
+    except Exception as e:
+        print(f"❌ Error extrayendo media: {e}")
+    return None
+
+def analizar_media_sync(wa_id, mime, datos):
+    """Transcribe audio / describe imagen o PDF con Gemini y lo guarda en mensajes_log.analisis."""
+    try:
+        if mime.startswith("audio/"):
+            pedido = "Transcribi este audio en español, literal. Solo el texto."
+        elif mime.startswith("image/") or mime == "application/pdf":
+            pedido = "Describi brevemente este contenido y transcribi cualquier texto visible, en español."
+        else:
+            return
+        r = client.models.generate_content(
+            model="gemini-2.5-flash",
+            contents=[types.Content(role="user", parts=[
+                types.Part.from_text(text=pedido),
+                types.Part.from_bytes(data=datos, mime_type=mime)])],
+        )
+        db = get_db(); c = db.cursor()
+        c.execute("UPDATE mensajes_log SET analisis=%s WHERE wa_message_id=%s", (r.text, wa_id))
+        db.commit(); c.close(); db.close()
+    except Exception as e:
+        print(f"❌ Error analizando media: {e}")
+
 def log_mensaje(canal, instancia, session_id, direccion, tipo, texto,
-                es_grupo=0, push_name=None, wa_id=None, raw=None):
+                es_grupo=0, push_name=None, wa_id=None, raw=None, archivo=None, mime=None):
     try:
         db = get_db()
         c = db.cursor()
         c.execute(
-            "INSERT IGNORE INTO mensajes_log (canal, instancia, session_id, es_grupo, direccion, tipo, texto, push_name, wa_message_id, raw) "
-            "VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)",
+            "INSERT IGNORE INTO mensajes_log (canal, instancia, session_id, es_grupo, direccion, tipo, texto, push_name, wa_message_id, raw, archivo, mime) "
+            "VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)",
             (canal, instancia, session_id, es_grupo, direccion, tipo, texto, push_name, wa_id,
-             json.dumps(raw, ensure_ascii=False) if raw is not None else None)
+             json.dumps(raw, ensure_ascii=False) if raw is not None else None, archivo, mime)
         )
         db.commit(); c.close(); db.close()
     except Exception as e:
@@ -404,13 +468,27 @@ async def webhook_whatsapp(request: Request, background_tasks: BackgroundTasks):
                         mensaje = message_content[k].get("caption", "") or ""
                         break
 
+            media = extraer_media(msg_data, message_content)
+            # No guardar el base64 gigante dentro del raw
+            try:
+                for contenedor in (message_content, msg_data):
+                    contenedor.pop("base64", None)
+                for k in MEDIA_TIPOS:
+                    if k in message_content:
+                        message_content[k].pop("base64", None)
+            except Exception:
+                pass
+
             # Registro completo (incluye grupos, multimedia y mensajes propios)
             log_mensaje(
                 "whatsapp", data.get("instance") or BRIDGE_INSTANCE, numero,
                 "saliente_operador" if is_from_me else "entrante", tipo, mensaje,
                 es_grupo=1 if es_grupo else 0, push_name=msg_data.get("pushName"),
-                wa_id=key.get("id"), raw=data
+                wa_id=key.get("id"), raw=data,
+                archivo=media[0] if media else None, mime=media[1] if media else None
             )
+            if media and MEDIA_ANALISIS and key.get("id"):
+                background_tasks.add_task(asyncio.to_thread, analizar_media_sync, key.get("id"), media[1], media[2])
 
             if es_grupo:
                 return {"status": "ignored_group"}
@@ -444,6 +522,16 @@ async def _bridge(metodo: str, ruta: str, body=None):
         except Exception:
             return res.status_code, {"raw": res.text}
 
+@app.get("/api/media/{nombre}")
+@app.get("/bot_euroaberturas/api/media/{nombre}")
+async def ver_media(nombre: str):
+    if not re.fullmatch(r"[0-9a-f]{32}\.[A-Za-z0-9]{1,8}", nombre):
+        return {"error": "nombre invalido"}
+    ruta = os.path.join(MEDIA_DIR, nombre)
+    if not os.path.isfile(ruta):
+        return {"error": "no existe"}
+    return FileResponse(ruta)
+
 @app.post("/api/conexion-crear")
 @app.post("/bot_euroaberturas/api/conexion-crear")
 async def conexion_crear():
@@ -456,7 +544,7 @@ async def conexion_crear():
         if BRIDGE_WEBHOOK_URL:
             _, webhook = await _bridge(
                 "POST", f"/api/instancias/{BRIDGE_INSTANCE}/webhook",
-                {"url": BRIDGE_WEBHOOK_URL, "events": ["MESSAGES_UPSERT"], "base64": False}
+                {"url": BRIDGE_WEBHOOK_URL, "events": ["MESSAGES_UPSERT"], "base64": True}
             )
         return {"status": "ok", "instancia": BRIDGE_INSTANCE, "crear": crear, "webhook": webhook}
     except Exception as e:
