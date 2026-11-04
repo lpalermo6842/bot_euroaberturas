@@ -38,6 +38,9 @@ BRIDGE_API_KEY = os.getenv("BRIDGE_API_KEY", "")
 BRIDGE_INSTANCE = os.getenv("BRIDGE_INSTANCE", "euroaberturas")
 BRIDGE_WEBHOOK_URL = os.getenv("BRIDGE_WEBHOOK_URL", "")  # URL publica (o interna) de /webhook/whatsapp
 
+# Si es 1, el bot NUNCA responde por WhatsApp (solo guarda todo para analisis).
+WHATSAPP_SOLO_ESCUCHA = os.getenv("WHATSAPP_SOLO_ESCUCHA", "0") == "1"
+
 def _bridge_headers():
     return {"Authorization": f"Bearer {BRIDGE_API_KEY}", "Content-Type": "application/json"}
 
@@ -57,7 +60,51 @@ def get_db():
         use_pure=True
     )
 
+def init_log_table():
+    """Registro crudo de TODO lo que entra y sale (para analisis)."""
+    try:
+        db = get_db()
+        c = db.cursor()
+        c.execute("""CREATE TABLE IF NOT EXISTS mensajes_log (
+            id BIGINT AUTO_INCREMENT PRIMARY KEY,
+            fecha TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            canal VARCHAR(30),
+            instancia VARCHAR(80),
+            session_id VARCHAR(80),
+            es_grupo TINYINT(1) DEFAULT 0,
+            direccion VARCHAR(20),
+            tipo VARCHAR(40),
+            texto MEDIUMTEXT,
+            push_name VARCHAR(120),
+            wa_message_id VARCHAR(120),
+            raw LONGTEXT,
+            UNIQUE KEY uq_wa (wa_message_id),
+            KEY ix_sess (session_id, fecha)
+        ) CHARACTER SET utf8mb4""")
+        db.commit(); c.close(); db.close()
+    except Exception as e:
+        print(f"❌ No se pudo crear mensajes_log: {e}")
+
+def log_mensaje(canal, instancia, session_id, direccion, tipo, texto,
+                es_grupo=0, push_name=None, wa_id=None, raw=None):
+    try:
+        db = get_db()
+        c = db.cursor()
+        c.execute(
+            "INSERT IGNORE INTO mensajes_log (canal, instancia, session_id, es_grupo, direccion, tipo, texto, push_name, wa_message_id, raw) "
+            "VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)",
+            (canal, instancia, session_id, es_grupo, direccion, tipo, texto, push_name, wa_id,
+             json.dumps(raw, ensure_ascii=False) if raw is not None else None)
+        )
+        db.commit(); c.close(); db.close()
+    except Exception as e:
+        print(f"❌ Error log_mensaje: {e}")
+
+init_log_table()
+
 async def enviar_respuesta_whatsapp(numero: str, texto: str):
+    if WHATSAPP_SOLO_ESCUCHA:
+        return
     if BRIDGE_API_KEY:
         try:
             async with httpx.AsyncClient() as http_client:
@@ -140,7 +187,7 @@ async def procesar_mensaje_core(
             db.close()
             return None, 0
 
-        if modo_global in ['solo_humano', 'desactivado'] and estado_bot != 'activo':
+        if modo_global in ['solo_humano', 'desactivado'] and (estado_bot != 'activo' or canal_slug == 'whatsapp'):
             cursor.close()
             db.close()
             return None, 0
@@ -337,31 +384,47 @@ async def webhook_whatsapp(request: Request, background_tasks: BackgroundTasks):
         if event in ["messages.upsert", "MESSAGES_UPSERT"]:
             msg_data = data.get("data", {})
             key = msg_data.get("key", {})
-            
-            remote_jid = key.get("remoteJid", "")
-            if "@g.us" in remote_jid:
-                return {"status": "ignored_group"}
 
+            remote_jid = key.get("remoteJid", "")
+            es_grupo = "@g.us" in remote_jid
             numero = remote_jid.split("@")[0]
             is_from_me = key.get("fromMe", False)
             rol_asignado = "human_operator" if is_from_me else "user"
 
+            message_content = msg_data.get("message", {}) or {}
+            tipo = msg_data.get("messageType") or (next(iter(message_content), "desconocido"))
             mensaje = ""
-            message_content = msg_data.get("message", {})
             if "conversation" in message_content:
                 mensaje = message_content["conversation"]
             elif "extendedTextMessage" in message_content:
                 mensaje = message_content["extendedTextMessage"].get("text", "")
+            else:
+                for k in ("imageMessage", "videoMessage", "documentMessage"):
+                    if k in message_content:
+                        mensaje = message_content[k].get("caption", "") or ""
+                        break
+
+            # Registro completo (incluye grupos, multimedia y mensajes propios)
+            log_mensaje(
+                "whatsapp", data.get("instance") or BRIDGE_INSTANCE, numero,
+                "saliente_operador" if is_from_me else "entrante", tipo, mensaje,
+                es_grupo=1 if es_grupo else 0, push_name=msg_data.get("pushName"),
+                wa_id=key.get("id"), raw=data
+            )
+
+            if es_grupo:
+                return {"status": "ignored_group"}
 
             if mensaje:
                 respuesta, _ = await procesar_mensaje_core(
-                    session_id=numero, 
-                    mensaje_cliente=mensaje, 
+                    session_id=numero,
+                    mensaje_cliente=mensaje,
                     origen_rol=rol_asignado,
                     canal_slug="whatsapp"
                 )
-                
-                if respuesta and not is_from_me:
+
+                if respuesta and not is_from_me and not WHATSAPP_SOLO_ESCUCHA:
+                    log_mensaje("whatsapp", BRIDGE_INSTANCE, numero, "saliente_bot", "conversation", respuesta)
                     background_tasks.add_task(enviar_respuesta_whatsapp, numero, respuesta)
 
         return {"status": "success"}
