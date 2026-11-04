@@ -34,6 +34,14 @@ ETIQUETAS_MEDIA = {
     "documentMessage": "[documento anterior]",
     "stickerMessage": "[sticker anterior]",
 }
+KINDS_MEDIA = {
+    "image": "[imagen anterior]",
+    "video": "[video anterior]",
+    "audio": "[audio anterior]",
+    "ptt": "[audio anterior]",
+    "document": "[documento anterior]",
+    "sticker": "[sticker anterior]",
+}
 
 
 def get_db():
@@ -59,7 +67,7 @@ def como_lista(d):
     if isinstance(d, list):
         return d
     if isinstance(d, dict):
-        for k in ("records", "messages", "chats", "data", "items", "result"):
+        for k in ("records", "messages", "chats", "data", "items", "result", "mensajes"):
             v = d.get(k)
             if isinstance(v, list):
                 return v
@@ -82,9 +90,42 @@ def timestamp_a_datetime(ts):
         return None
 
 
-def extraer_texto_y_tipo(msg):
-    contenido = msg.get("message") or {}
-    tipo = msg.get("messageType") or (next(iter(contenido), "desconocido"))
+def es_numero(jid):
+    return isinstance(jid, str) and jid.endswith("@s.whatsapp.net")
+
+
+def normalizar(m):
+    """Devuelve dict(wa_id, from_me, texto, tipo, fecha, nombre, numero) para los dos formatos conocidos."""
+    # Formato del bridge: id, fromMe, chat, sender, nombre, kind, text, caption, timestamp, _media
+    if "kind" in m or "chat" in m:
+        media_key = ((m.get("_media") or {}).get("key") or {})
+        from_me = bool(m.get("fromMe"))
+        chat = m.get("chat") or ""
+        if es_numero(media_key.get("remoteJidAlt")):
+            numero_jid = media_key["remoteJidAlt"]
+        elif es_numero(chat):
+            numero_jid = chat
+        elif not from_me and es_numero(m.get("sender")):
+            numero_jid = m["sender"]
+        else:
+            numero_jid = chat
+        texto = (m.get("text") or "").strip()
+        caption = (m.get("caption") or "").strip()
+        kind = m.get("kind") or "desconocido"
+        if kind in KINDS_MEDIA:
+            extra = caption or texto
+            texto = KINDS_MEDIA[kind] + ((" " + extra) if extra else "")
+        elif not texto:
+            texto = caption
+        return {
+            "wa_id": m.get("id"), "from_me": from_me, "texto": texto, "tipo": kind,
+            "fecha": timestamp_a_datetime(m.get("timestamp")), "nombre": m.get("nombre"),
+            "numero": numero_jid.split("@")[0], "chat": chat,
+        }
+    # Formato Evolution: key{remoteJid,fromMe,id}, message{...}, messageTimestamp
+    key = m.get("key") or {}
+    contenido = m.get("message") or {}
+    tipo = m.get("messageType") or (next(iter(contenido), "desconocido"))
     texto = ""
     if "conversation" in contenido:
         texto = contenido["conversation"]
@@ -97,9 +138,24 @@ def extraer_texto_y_tipo(msg):
                 break
     for k, etiqueta in ETIQUETAS_MEDIA.items():
         if k in contenido:
-            texto = (etiqueta + (" " + texto if texto else ""))
+            texto = etiqueta + ((" " + texto) if texto else "")
             break
-    return tipo, texto.strip()
+    jid = key.get("remoteJidAlt") if es_numero(key.get("remoteJidAlt")) else key.get("remoteJid", "")
+    return {
+        "wa_id": key.get("id"), "from_me": bool(key.get("fromMe")), "texto": texto.strip(), "tipo": tipo,
+        "fecha": timestamp_a_datetime(m.get("messageTimestamp")), "nombre": m.get("pushName"),
+        "numero": (jid or "").split("@")[0], "chat": key.get("remoteJid", ""),
+    }
+
+
+def jid_de_chat(ch):
+    if not isinstance(ch, dict):
+        return None
+    for k in ("remoteJid", "jid", "chat", "id"):
+        v = ch.get(k)
+        if isinstance(v, str) and "@" in v:
+            return v
+    return None
 
 
 def obtener_chats():
@@ -124,12 +180,14 @@ def probar():
         print("Respuesta cruda (recortada):", json.dumps(crudo)[:800])
         return
     print("Ejemplo de chat:", json.dumps(chats[0], ensure_ascii=False)[:600])
-    jid = chats[0].get("remoteJid") or chats[0].get("id")
+    print("Claves del chat:", list(chats[0].keys()) if isinstance(chats[0], dict) else type(chats[0]))
+    jid = jid_de_chat(chats[0])
+    print("JID detectado:", jid)
     msgs, crudo_m = obtener_mensajes(jid, 5)
     print(f"Mensajes de prueba para {jid}: {len(msgs)}")
     if msgs:
-        m = json.dumps(msgs[0], ensure_ascii=False)
-        print("Ejemplo de mensaje (recortado):", m[:800])
+        for mm in msgs[:5]:
+            print("  normalizado:", normalizar(mm))
     else:
         print("Respuesta cruda (recortada):", json.dumps(crudo_m)[:800])
 
@@ -143,42 +201,31 @@ def importar(limite):
     total_chats = 0
 
     for ch in chats:
-        jid = ch.get("remoteJid") or ch.get("id") or ""
+        jid = jid_de_chat(ch)
         if not jid or "@g.us" in jid or jid.startswith("status@") or "@broadcast" in jid:
             continue
-        numero = jid.split("@")[0]
         msgs, _ = obtener_mensajes(jid, limite)
-        if not msgs:
+        norm = [n for n in (normalizar(m) for m in msgs) if n and n["texto"] and n["wa_id"]]
+        if not norm:
             continue
-
-        # ordenar cronologicamente
-        def clave(m):
-            f = timestamp_a_datetime(m.get("messageTimestamp"))
-            return f or datetime.min
-        msgs.sort(key=clave)
+        norm.sort(key=lambda n: n["fecha"] or datetime.min)
 
         conv_id = None
         nuevos = 0
-        for m in msgs:
-            key = m.get("key", {}) or {}
-            wa_id = key.get("id")
-            from_me = bool(key.get("fromMe"))
-            tipo, texto = extraer_texto_y_tipo(m)
-            if not texto:
-                continue  # reacciones, protocolo, etc.
-            fecha = timestamp_a_datetime(m.get("messageTimestamp")) or datetime.now()
-
+        numero = norm[0]["numero"]
+        for n in norm:
+            fecha = n["fecha"] or datetime.now()
             cur.execute(
                 "INSERT IGNORE INTO mensajes_log (fecha, canal, instancia, session_id, es_grupo, direccion, tipo, texto, push_name, wa_message_id) "
                 "VALUES (%s,'whatsapp',%s,%s,0,%s,%s,%s,%s,%s)",
-                (fecha, INSTANCIA, numero, "saliente_operador" if from_me else "entrante",
-                 tipo, texto, m.get("pushName"), wa_id),
+                (fecha, INSTANCIA, n["numero"], "saliente_operador" if n["from_me"] else "entrante",
+                 n["tipo"], n["texto"], n["nombre"], n["wa_id"]),
             )
             if cur.rowcount != 1:
                 continue  # ya estaba
 
             if conv_id is None:
-                cur.execute("SELECT id FROM conversaciones WHERE session_id = %s", (numero,))
+                cur.execute("SELECT id FROM conversaciones WHERE session_id = %s", (n["numero"],))
                 fila = cur.fetchone()
                 if fila:
                     conv_id = fila[0]
@@ -186,18 +233,17 @@ def importar(limite):
                     cur.execute(
                         "INSERT INTO conversaciones (session_id, ultimo_mensaje, empresa_id, estado_atencion, estado_bot) "
                         "VALUES (%s, %s, 'euroaberturas', 'progreso', 'humano')",
-                        (numero, texto[:100]),
+                        (n["numero"], n["texto"][:100]),
                     )
                     conv_id = cur.lastrowid
 
             cur.execute(
                 "INSERT INTO mensajes (conversacion_id, rol, texto, `timestamp`) VALUES (%s, %s, %s, %s)",
-                (conv_id, "human_operator" if from_me else "user", texto, fecha),
+                (conv_id, "human_operator" if n["from_me"] else "user", n["texto"], fecha),
             )
             nuevos += 1
 
         if conv_id and nuevos:
-            # ultimo_mensaje solo si el importado es mas reciente que lo que ya hay
             cur.execute(
                 "SELECT texto FROM mensajes WHERE conversacion_id=%s ORDER BY `timestamp` DESC, id DESC LIMIT 1",
                 (conv_id,),
