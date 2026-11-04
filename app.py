@@ -213,6 +213,33 @@ def log_mensaje(canal, instancia, session_id, direccion, tipo, texto,
 
 init_log_table()
 
+def unificar_lid(lid_id, telefono):
+    """Pasa una conversacion guardada bajo un ID interno (@lid) al telefono real, sin perder mensajes."""
+    try:
+        db = get_db()
+        c = db.cursor()
+        c.execute("SELECT id, nombre_cliente FROM conversaciones WHERE session_id = %s", (lid_id,))
+        conv_lid = c.fetchone()
+        if conv_lid:
+            c.execute("SELECT id, nombre_cliente FROM conversaciones WHERE session_id = %s", (telefono,))
+            conv_tel = c.fetchone()
+            if not conv_tel:
+                c.execute("UPDATE conversaciones SET session_id = %s WHERE id = %s", (telefono, conv_lid[0]))
+            else:
+                # Ya existe la del telefono: se mueven los mensajes y se conserva el nombre cargado a mano
+                c.execute("UPDATE mensajes SET conversacion_id = %s WHERE conversacion_id = %s", (conv_tel[0], conv_lid[0]))
+                if conv_lid[1] and not conv_tel[1]:
+                    c.execute("UPDATE conversaciones SET nombre_cliente = %s WHERE id = %s", (conv_lid[1], conv_tel[0]))
+                try:
+                    c.execute("DELETE FROM conversaciones WHERE id = %s", (conv_lid[0],))
+                except Exception:
+                    # si hay tablas que la referencian, queda marcada en vez de borrarse
+                    c.execute("UPDATE conversaciones SET session_id = %s WHERE id = %s", (f"{lid_id}_unido", conv_lid[0]))
+        c.execute("UPDATE mensajes_log SET session_id = %s WHERE session_id = %s", (telefono, lid_id))
+        db.commit(); c.close(); db.close()
+    except Exception as e:
+        print(f"❌ Error unificando {lid_id} -> {telefono}: {e}")
+
 def guardar_nombre_cliente(numero, push_name):
     """Completa conversaciones.nombre_cliente con el nombre de perfil de WhatsApp si esta vacio."""
     nombre = (push_name or "").strip()
@@ -658,6 +685,7 @@ async def webhook_whatsapp(request: Request, background_tasks: BackgroundTasks):
             alt_jid = key.get("remoteJidAlt") or ""
             if remote_jid.endswith("@lid") and alt_jid.endswith("@s.whatsapp.net"):
                 numero = alt_jid.split("@")[0]
+                await asyncio.to_thread(unificar_lid, remote_jid.split("@")[0], numero)
             is_from_me = key.get("fromMe", False)
             rol_asignado = "human_operator" if is_from_me else "user"
 
