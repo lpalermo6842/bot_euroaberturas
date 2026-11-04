@@ -26,9 +26,9 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN", "8884694562:AAEJZXluGzyZZVE_xzUknDAwz5mL3YZSR-k")
+TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN", "")
 EVOLUTION_API_URL = os.getenv("EVOLUTION_API_URL", "http://127.0.0.1:8085")
-EVOLUTION_API_KEY = os.getenv("EVOLUTION_API_KEY", "MiClaveSecreta123")
+EVOLUTION_API_KEY = os.getenv("EVOLUTION_API_KEY", "")
 INSTANCE_NAME = "euroaberturas"
 
 # --- BRIDGE DIPA (WhatsApp) ---
@@ -50,10 +50,10 @@ def cargar_prompt_sistema():
 
 def get_db():
     return mysql.connector.connect(
-        host="127.0.0.1",
-        user="lpalermo",
-        password="LP684426",
-        database="bot_euroaberturas",
+        host=os.getenv("DB_HOST", "127.0.0.1"),
+        user=os.getenv("DB_USER", ""),
+        password=os.getenv("DB_PASSWORD", ""),
+        database=os.getenv("DB_NAME", "bot_euroaberturas"),
         use_pure=True
     )
 
